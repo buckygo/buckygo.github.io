@@ -1001,7 +1001,7 @@ export function DailyLogView() {
 
       const config = CATEGORY_CONFIG[entry.category];
       const card = document.createElement('li');
-      card.className = `bg-white p-3 rounded-xl flex items-start space-x-4`;
+      card.className = `bg-white p-3 rounded-xl flex items-start space-x-4 noselect`;
       const time = entryDateObj.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
 
       card.innerHTML = `
@@ -1042,6 +1042,7 @@ export function DailyLogView() {
       card.addEventListener('mouseleave', cancelPress);
       card.addEventListener('touchend', cancelPress);
       card.addEventListener('touchcancel', cancelPress);
+      card.addEventListener('touchmove', cancelPress);
       
       card.addEventListener('click', (e) => {
         if (longPressTriggered) {

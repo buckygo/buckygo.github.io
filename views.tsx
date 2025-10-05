@@ -577,7 +577,7 @@ export function DailyLogView(): HTMLElement {
                 tag.className = 'bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded-full flex items-center';
                 
                 const textSpan = document.createElement('span');
-                textSpan.textContent = item;
+                textSpan.textContent = item as string;
                 tag.appendChild(textSpan);
                 
                 const removeBtn = document.createElement('button');
@@ -587,7 +587,7 @@ export function DailyLogView(): HTMLElement {
                 removeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-3 h-3"><path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" /></svg>`;
                 removeBtn.onclick = (e) => {
                     e.stopPropagation();
-                    selectedItems.delete(item);
+                    selectedItems.delete(item as string);
                     renderModalContent();
                 };
                 tag.appendChild(removeBtn);
@@ -1006,7 +1006,7 @@ export function DailyLogView(): HTMLElement {
 
       const config = CATEGORY_CONFIG[entry.category];
       const card = document.createElement('li');
-      card.className = `bg-white p-3 rounded-xl flex items-start space-x-4`;
+      card.className = `bg-white p-3 rounded-xl flex items-start space-x-4 noselect`;
       const time = entryDateObj.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
 
       card.innerHTML = `
@@ -1047,6 +1047,7 @@ export function DailyLogView(): HTMLElement {
       card.addEventListener('mouseleave', cancelPress);
       card.addEventListener('touchend', cancelPress);
       card.addEventListener('touchcancel', cancelPress);
+      card.addEventListener('touchmove', cancelPress);
       
       card.addEventListener('click', (e) => {
         if (longPressTriggered) {
@@ -1504,7 +1505,7 @@ export function AddEntryView(): HTMLElement {
                 tag.className = 'bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded-full flex items-center';
                 
                 const textSpan = document.createElement('span');
-                textSpan.textContent = item;
+                textSpan.textContent = item as string;
                 tag.appendChild(textSpan);
                 
                 const removeBtn = document.createElement('button');
@@ -1514,7 +1515,7 @@ export function AddEntryView(): HTMLElement {
                 removeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-3 h-3"><path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" /></svg>`;
                 removeBtn.onclick = (e) => {
                     e.stopPropagation();
-                    selectedItems.delete(item);
+                    selectedItems.delete(item as string);
                     renderModalContent();
                 };
                 tag.appendChild(removeBtn);
