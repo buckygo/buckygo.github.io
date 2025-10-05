@@ -38,7 +38,7 @@ async function analyzeLogsWithGemini(entries, period, category) {
 
     const prompt = `您是一位專業的抽動症日誌分析AI助理。您的目標是根據家長記錄的日常日誌，幫助他們識別潛在的模式和觸發因素。請以支持、清晰且非醫療建議的語氣提供見解。請務必使用繁體中文輸出。您的分析應簡潔易懂。
 
-這是我孩子在過去 ${period} 天的日誌條目。'行為' 類別記錄了與抽動相關的行為。
+這是我孩子在過去 ${period} 天的日誌資料。'行為' 類別記錄了與抽動相關的行為。
 
 日誌資料 (JSON):
 ${JSON.stringify(formattedEntries)}
@@ -311,6 +311,243 @@ export function DailyLogView() {
             document.body.appendChild(overlay);
         };
 
+        const showEditSubCategoryModal = (oldSubCatName, category) => {
+            const onConfirm = (newSubCatName) => {
+                if (!customItems[category]) return;
+                const targetSubCat = customItems[category].find(sc => sc.name === oldSubCatName);
+                if (targetSubCat) {
+                    targetSubCat.name = newSubCatName;
+                    saveCustomItems();
+                    if (viewingSubCategoryItems === oldSubCatName) {
+                        viewingSubCategoryItems = newSubCatName;
+                    }
+                    renderModalContent();
+                }
+            };
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[90] p-4 animate-fade-in-fast';
+            
+            const panel = document.createElement('div');
+            panel.className = 'bg-white rounded-xl shadow-xl w-full max-w-xs animate-slide-up flex flex-col';
+        
+            const header = document.createElement('div');
+            header.className = 'p-3 border-b';
+            header.innerHTML = `<h3 class="font-semibold text-center text-gray-800">修改子分類名稱</h3>`;
+            
+            const body = document.createElement('div');
+            body.className = 'p-4';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+            input.value = oldSubCatName;
+            input.onkeydown = (e) => { if (e.key === 'Enter') confirmButton.click(); };
+            body.appendChild(input);
+        
+            const footer = document.createElement('div');
+            footer.className = 'p-2 bg-gray-50 grid grid-cols-2 gap-2';
+            
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition';
+            cancelButton.textContent = '取消';
+            cancelButton.onclick = () => overlay.remove();
+        
+            const confirmButton = document.createElement('button');
+            confirmButton.className = 'px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition';
+            confirmButton.textContent = '儲存';
+            confirmButton.onclick = () => {
+                const value = input.value.trim();
+                if (value && value !== oldSubCatName) {
+                    const isDuplicate = (SUBCATEGORIES[category]?.some(sc => sc.name === value)) ||
+                                        (customItems[category]?.some(sc => sc.name === value));
+                     if (!isDuplicate) {
+                         onConfirm(value);
+                     }
+                }
+                overlay.remove();
+            };
+        
+            footer.appendChild(cancelButton);
+            footer.appendChild(confirmButton);
+            panel.appendChild(header);
+            panel.appendChild(body);
+            panel.appendChild(footer);
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            overlay.appendChild(panel);
+            document.body.appendChild(overlay);
+            setTimeout(() => { input.focus(); input.select(); }, 50);
+        };
+
+        const showSubCategoryActionMenu = (subCatName, category) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[80] animate-fade-in-fast';
+        
+            const panel = document.createElement('div');
+            panel.className = 'fixed bottom-0 left-0 right-0 p-2 bg-transparent rounded-t-2xl animate-slide-up max-w-md mx-auto';
+            
+            const actionsGroup = document.createElement('div');
+            actionsGroup.className = 'bg-white/80 backdrop-blur-xl rounded-xl overflow-hidden';
+        
+            const editButton = document.createElement('button');
+            editButton.className = 'w-full p-3 text-center text-blue-500 font-semibold text-lg hover:bg-gray-100 transition';
+            editButton.textContent = '修改名稱';
+            editButton.onclick = () => {
+                overlay.remove();
+                showEditSubCategoryModal(subCatName, category);
+            };
+        
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'w-full p-3 text-center text-red-500 font-semibold text-lg hover:bg-gray-100 transition';
+            deleteButton.textContent = '刪除分類';
+            deleteButton.onclick = () => {
+                overlay.remove();
+                showDeleteSubCategoryConfirmation(subCatName, category);
+            };
+            
+            const separator = document.createElement('div');
+            separator.className = 'h-px bg-gray-300/60';
+        
+            actionsGroup.appendChild(editButton);
+            actionsGroup.appendChild(separator);
+            actionsGroup.appendChild(deleteButton);
+        
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'w-full p-3 mt-2 text-center text-blue-500 font-bold text-lg bg-white/80 backdrop-blur-xl rounded-xl hover:bg-gray-100 transition';
+            cancelButton.textContent = '取消';
+            cancelButton.onclick = () => overlay.remove();
+        
+            panel.appendChild(actionsGroup);
+            panel.appendChild(cancelButton);
+            overlay.appendChild(panel);
+            overlay.onclick = (e) => {
+                if (e.target === overlay) overlay.remove();
+            };
+            document.body.appendChild(overlay);
+        };
+        
+        const showEditCustomItemModal = (oldItemName, category, subCatName) => {
+            const onConfirm = (newItemName) => {
+                if (!customItems[category]) return;
+                const targetSubCat = customItems[category].find(sc => sc.name === subCatName);
+                if (targetSubCat) {
+                    const itemIndex = targetSubCat.items.indexOf(oldItemName);
+                    if (itemIndex > -1) {
+                        targetSubCat.items[itemIndex] = newItemName;
+                        if (selectedItems.has(oldItemName)) {
+                            selectedItems.delete(oldItemName);
+                            selectedItems.add(newItemName);
+                        }
+                        saveCustomItems();
+                        renderModalContent();
+                    }
+                }
+            };
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[90] p-4 animate-fade-in-fast';
+            
+            const panel = document.createElement('div');
+            panel.className = 'bg-white rounded-xl shadow-xl w-full max-w-xs animate-slide-up flex flex-col';
+        
+            const header = document.createElement('div');
+            header.className = 'p-3 border-b';
+            header.innerHTML = `<h3 class="font-semibold text-center text-gray-800">修改項目</h3>`;
+            
+            const body = document.createElement('div');
+            body.className = 'p-4';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+            input.value = oldItemName;
+            input.onkeydown = (e) => { if (e.key === 'Enter') confirmButton.click(); };
+            body.appendChild(input);
+        
+            const footer = document.createElement('div');
+            footer.className = 'p-2 bg-gray-50 grid grid-cols-2 gap-2';
+            
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition';
+            cancelButton.textContent = '取消';
+            cancelButton.onclick = () => overlay.remove();
+        
+            const confirmButton = document.createElement('button');
+            confirmButton.className = 'px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition';
+            confirmButton.textContent = '儲存';
+            confirmButton.onclick = () => {
+                const value = input.value.trim();
+                if (value && value !== oldItemName) {
+                    let isDuplicate = false;
+                    if (customItems[category]) {
+                        const targetSubCat = customItems[category].find(sc => sc.name === subCatName);
+                        if (targetSubCat && targetSubCat.items.includes(value)) {
+                            isDuplicate = true;
+                        }
+                    }
+                     if (!isDuplicate) {
+                         onConfirm(value);
+                     }
+                }
+                overlay.remove();
+            };
+        
+            footer.appendChild(cancelButton);
+            footer.appendChild(confirmButton);
+            panel.appendChild(header);
+            panel.appendChild(body);
+            panel.appendChild(footer);
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            overlay.appendChild(panel);
+            document.body.appendChild(overlay);
+            setTimeout(() => { input.focus(); input.select(); }, 50);
+        };
+
+        const showCustomItemActionMenu = (itemName, category, subCatName) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[80] animate-fade-in-fast';
+        
+            const panel = document.createElement('div');
+            panel.className = 'fixed bottom-0 left-0 right-0 p-2 bg-transparent rounded-t-2xl animate-slide-up max-w-md mx-auto';
+            
+            const actionsGroup = document.createElement('div');
+            actionsGroup.className = 'bg-white/80 backdrop-blur-xl rounded-xl overflow-hidden';
+        
+            const editButton = document.createElement('button');
+            editButton.className = 'w-full p-3 text-center text-blue-500 font-semibold text-lg hover:bg-gray-100 transition';
+            editButton.textContent = '修改項目';
+            editButton.onclick = () => {
+                overlay.remove();
+                showEditCustomItemModal(itemName, category, subCatName);
+            };
+        
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'w-full p-3 text-center text-red-500 font-semibold text-lg hover:bg-gray-100 transition';
+            deleteButton.textContent = '刪除項目';
+            deleteButton.onclick = () => {
+                overlay.remove();
+                showDeleteItemConfirmation(itemName, category, subCatName);
+            };
+            
+            const separator = document.createElement('div');
+            separator.className = 'h-px bg-gray-300/60';
+        
+            actionsGroup.appendChild(editButton);
+            actionsGroup.appendChild(separator);
+            actionsGroup.appendChild(deleteButton);
+        
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'w-full p-3 mt-2 text-center text-blue-500 font-bold text-lg bg-white/80 backdrop-blur-xl rounded-xl hover:bg-gray-100 transition';
+            cancelButton.textContent = '取消';
+            cancelButton.onclick = () => overlay.remove();
+        
+            panel.appendChild(actionsGroup);
+            panel.appendChild(cancelButton);
+            overlay.appendChild(panel);
+            overlay.onclick = (e) => {
+                if (e.target === overlay) overlay.remove();
+            };
+            document.body.appendChild(overlay);
+        };
+
         const updateSelectionPreview = () => {
             if (!selectionPreviewContainer) return;
             selectionPreviewContainer.innerHTML = '';
@@ -430,7 +667,7 @@ export function DailyLogView() {
                 modalBody.appendChild(mealTypeContainer);
             } else {
                  let headerTitle;
-                let backAction = undefined;
+                let backAction;
 
                 if (category === '飲食' && selectedMealType) {
                     headerTitle = `編輯 ${selectedMealType} 內容`;
@@ -491,7 +728,7 @@ export function DailyLogView() {
                                 pressTimer = window.setTimeout(() => {
                                     longPressTriggered = true;
                                     if ('vibrate' in navigator) { navigator.vibrate(50); }
-                                    showDeleteSubCategoryConfirmation(subCat.name, category);
+                                    showSubCategoryActionMenu(subCat.name, category);
                                 }, 700);
                             };
 
@@ -512,7 +749,7 @@ export function DailyLogView() {
                     if (customSubCatExists) {
                         const hintText = document.createElement('p');
                         hintText.className = 'text-xs text-center text-gray-500 pt-2';
-                        hintText.textContent = '提示：長按自訂的子分類可將其刪除。';
+                        hintText.textContent = '提示：長按自訂的子分類可修改或刪除。';
                         quickAddContainer.appendChild(hintText);
                     }
 
@@ -571,7 +808,7 @@ export function DailyLogView() {
                                     pressTimer = window.setTimeout(() => {
                                         longPressTriggered = true;
                                         if ('vibrate' in navigator) navigator.vibrate(50);
-                                        showDeleteItemConfirmation(item, category, subCat.name);
+                                        showCustomItemActionMenu(item, category, subCat.name);
                                     }, 700);
                                 };
                                 const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
@@ -596,7 +833,7 @@ export function DailyLogView() {
                         if (combinedItems.some(item => !defaultItems.includes(item))) {
                             const hintText = document.createElement('p');
                             hintText.className = 'text-xs text-center text-gray-500 pt-3';
-                            hintText.textContent = '提示：長按自訂的項目可將其刪除。';
+                            hintText.textContent = '提示：長按自訂的項目可修改或刪除。';
                             quickAddContainer.appendChild(hintText);
                         }
 
@@ -664,6 +901,7 @@ export function DailyLogView() {
         document.body.appendChild(modalOverlay);
         renderModalContent();
     };
+
 
     const showActionMenu = (entry) => {
         const overlay = document.createElement('div');
@@ -998,6 +1236,245 @@ export function AddEntryView() {
             document.body.appendChild(overlay);
         };
 
+        const showEditSubCategoryModal = (oldSubCatName, category) => {
+            const onConfirm = (newSubCatName) => {
+                if (!customItems[category]) return;
+                const targetSubCat = customItems[category].find(sc => sc.name === oldSubCatName);
+                if (targetSubCat) {
+                    targetSubCat.name = newSubCatName;
+                    saveCustomItems();
+                    if (viewingSubCategoryItems === oldSubCatName) {
+                        viewingSubCategoryItems = newSubCatName;
+                    }
+                    renderModalContent();
+                }
+            };
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[90] p-4 animate-fade-in-fast';
+            
+            const panel = document.createElement('div');
+            panel.className = 'bg-white rounded-xl shadow-xl w-full max-w-xs animate-slide-up flex flex-col';
+        
+            const header = document.createElement('div');
+            header.className = 'p-3 border-b';
+            header.innerHTML = `<h3 class="font-semibold text-center text-gray-800">修改子分類名稱</h3>`;
+            
+            const body = document.createElement('div');
+            body.className = 'p-4';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+            input.value = oldSubCatName;
+            input.onkeydown = (e) => { if (e.key === 'Enter') confirmButton.click(); };
+            body.appendChild(input);
+        
+            const footer = document.createElement('div');
+            footer.className = 'p-2 bg-gray-50 grid grid-cols-2 gap-2';
+            
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition';
+            cancelButton.textContent = '取消';
+            cancelButton.onclick = () => overlay.remove();
+        
+            const confirmButton = document.createElement('button');
+            confirmButton.className = 'px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition';
+            confirmButton.textContent = '儲存';
+            confirmButton.onclick = () => {
+                const value = input.value.trim();
+                if (value && value !== oldSubCatName) {
+                    const isDuplicate = (SUBCATEGORIES[category]?.some(sc => sc.name === value)) ||
+                                        (customItems[category]?.some(sc => sc.name === value));
+                     if (!isDuplicate) {
+                         onConfirm(value);
+                     }
+                }
+                overlay.remove();
+            };
+        
+            footer.appendChild(cancelButton);
+            footer.appendChild(confirmButton);
+            panel.appendChild(header);
+            panel.appendChild(body);
+            panel.appendChild(footer);
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            overlay.appendChild(panel);
+            document.body.appendChild(overlay);
+            setTimeout(() => { input.focus(); input.select(); }, 50);
+        };
+
+        const showSubCategoryActionMenu = (subCatName, category) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[80] animate-fade-in-fast';
+        
+            const panel = document.createElement('div');
+            panel.className = 'fixed bottom-0 left-0 right-0 p-2 bg-transparent rounded-t-2xl animate-slide-up max-w-md mx-auto';
+            
+            const actionsGroup = document.createElement('div');
+            actionsGroup.className = 'bg-white/80 backdrop-blur-xl rounded-xl overflow-hidden';
+        
+            const editButton = document.createElement('button');
+            editButton.className = 'w-full p-3 text-center text-blue-500 font-semibold text-lg hover:bg-gray-100 transition';
+            editButton.textContent = '修改名稱';
+            editButton.onclick = () => {
+                overlay.remove();
+                showEditSubCategoryModal(subCatName, category);
+            };
+        
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'w-full p-3 text-center text-red-500 font-semibold text-lg hover:bg-gray-100 transition';
+            deleteButton.textContent = '刪除分類';
+            deleteButton.onclick = () => {
+                overlay.remove();
+                showDeleteSubCategoryConfirmation(subCatName, category);
+            };
+            
+            const separator = document.createElement('div');
+            separator.className = 'h-px bg-gray-300/60';
+        
+            actionsGroup.appendChild(editButton);
+            actionsGroup.appendChild(separator);
+            actionsGroup.appendChild(deleteButton);
+        
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'w-full p-3 mt-2 text-center text-blue-500 font-bold text-lg bg-white/80 backdrop-blur-xl rounded-xl hover:bg-gray-100 transition';
+            cancelButton.textContent = '取消';
+            cancelButton.onclick = () => overlay.remove();
+        
+            panel.appendChild(actionsGroup);
+            panel.appendChild(cancelButton);
+            overlay.appendChild(panel);
+            overlay.onclick = (e) => {
+                if (e.target === overlay) overlay.remove();
+            };
+            document.body.appendChild(overlay);
+        };
+        
+        const showEditCustomItemModal = (oldItemName, category, subCatName) => {
+            const onConfirm = (newItemName) => {
+                if (!customItems[category]) return;
+                let targetSubCat = customItems[category].find(sc => sc.name === subCatName);
+                if (!targetSubCat) { 
+                    targetSubCat = { name: subCatName, items: [] };
+                    customItems[category].push(targetSubCat);
+                }
+                const itemIndex = targetSubCat.items.indexOf(oldItemName);
+                if (itemIndex > -1) {
+                    targetSubCat.items[itemIndex] = newItemName;
+                    if (selectedItems.has(oldItemName)) {
+                        selectedItems.delete(oldItemName);
+                        selectedItems.add(newItemName);
+                    }
+                    saveCustomItems();
+                    renderModalContent();
+                }
+            };
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[90] p-4 animate-fade-in-fast';
+            
+            const panel = document.createElement('div');
+            panel.className = 'bg-white rounded-xl shadow-xl w-full max-w-xs animate-slide-up flex flex-col';
+        
+            const header = document.createElement('div');
+            header.className = 'p-3 border-b';
+            header.innerHTML = `<h3 class="font-semibold text-center text-gray-800">修改項目</h3>`;
+            
+            const body = document.createElement('div');
+            body.className = 'p-4';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+            input.value = oldItemName;
+            input.onkeydown = (e) => { if (e.key === 'Enter') confirmButton.click(); };
+            body.appendChild(input);
+        
+            const footer = document.createElement('div');
+            footer.className = 'p-2 bg-gray-50 grid grid-cols-2 gap-2';
+            
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition';
+            cancelButton.textContent = '取消';
+            cancelButton.onclick = () => overlay.remove();
+        
+            const confirmButton = document.createElement('button');
+            confirmButton.className = 'px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition';
+            confirmButton.textContent = '儲存';
+            confirmButton.onclick = () => {
+                const value = input.value.trim();
+                if (value && value !== oldItemName) {
+                    let isDuplicate = false;
+                    if (customItems[category]) {
+                        const targetSubCat = customItems[category].find(sc => sc.name === subCatName);
+                        if (targetSubCat && targetSubCat.items.includes(value)) {
+                            isDuplicate = true;
+                        }
+                    }
+                     if (!isDuplicate) {
+                         onConfirm(value);
+                     }
+                }
+                overlay.remove();
+            };
+        
+            footer.appendChild(cancelButton);
+            footer.appendChild(confirmButton);
+            panel.appendChild(header);
+            panel.appendChild(body);
+            panel.appendChild(footer);
+            overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+            overlay.appendChild(panel);
+            document.body.appendChild(overlay);
+            setTimeout(() => { input.focus(); input.select(); }, 50);
+        };
+
+        const showCustomItemActionMenu = (itemName, category, subCatName) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[80] animate-fade-in-fast';
+        
+            const panel = document.createElement('div');
+            panel.className = 'fixed bottom-0 left-0 right-0 p-2 bg-transparent rounded-t-2xl animate-slide-up max-w-md mx-auto';
+            
+            const actionsGroup = document.createElement('div');
+            actionsGroup.className = 'bg-white/80 backdrop-blur-xl rounded-xl overflow-hidden';
+        
+            const editButton = document.createElement('button');
+            editButton.className = 'w-full p-3 text-center text-blue-500 font-semibold text-lg hover:bg-gray-100 transition';
+            editButton.textContent = '修改項目';
+            editButton.onclick = () => {
+                overlay.remove();
+                showEditCustomItemModal(itemName, category, subCatName);
+            };
+        
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'w-full p-3 text-center text-red-500 font-semibold text-lg hover:bg-gray-100 transition';
+            deleteButton.textContent = '刪除項目';
+            deleteButton.onclick = () => {
+                overlay.remove();
+                showDeleteItemConfirmation(itemName, category, subCatName);
+            };
+            
+            const separator = document.createElement('div');
+            separator.className = 'h-px bg-gray-300/60';
+        
+            actionsGroup.appendChild(editButton);
+            actionsGroup.appendChild(separator);
+            actionsGroup.appendChild(deleteButton);
+        
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'w-full p-3 mt-2 text-center text-blue-500 font-bold text-lg bg-white/80 backdrop-blur-xl rounded-xl hover:bg-gray-100 transition';
+            cancelButton.textContent = '取消';
+            cancelButton.onclick = () => overlay.remove();
+        
+            panel.appendChild(actionsGroup);
+            panel.appendChild(cancelButton);
+            overlay.appendChild(panel);
+            overlay.onclick = (e) => {
+                if (e.target === overlay) overlay.remove();
+            };
+            document.body.appendChild(overlay);
+        };
+
         const updateSelectionPreview = () => {
             if (!selectionPreviewContainer) return;
             selectionPreviewContainer.innerHTML = '';
@@ -1092,7 +1569,7 @@ export function AddEntryView() {
                 modalBody.appendChild(mealTypeContainer);
             } else {
                 let headerTitle;
-                let backAction = undefined;
+                let backAction;
 
                 if (category === '飲食' && selectedMealType) {
                     headerTitle = `記錄 ${selectedMealType} 內容`;
@@ -1154,7 +1631,7 @@ export function AddEntryView() {
                                 pressTimer = window.setTimeout(() => {
                                     longPressTriggered = true;
                                     if ('vibrate' in navigator) { navigator.vibrate(50); }
-                                    showDeleteSubCategoryConfirmation(subCat.name, category);
+                                    showSubCategoryActionMenu(subCat.name, category);
                                 }, 700);
                             };
 
@@ -1180,7 +1657,7 @@ export function AddEntryView() {
                     if (customSubCatExists) {
                         const hintText = document.createElement('p');
                         hintText.className = 'text-xs text-center text-gray-500 pt-2';
-                        hintText.textContent = '提示：長按自訂的子分類可將其刪除。';
+                        hintText.textContent = '提示：長按自訂的子分類可修改或刪除。';
                         quickAddContainer.appendChild(hintText);
                     }
 
@@ -1244,7 +1721,7 @@ export function AddEntryView() {
                                     pressTimer = window.setTimeout(() => {
                                         longPressTriggered = true;
                                         if ('vibrate' in navigator) navigator.vibrate(50);
-                                        showDeleteItemConfirmation(item, category, subCat.name);
+                                        showCustomItemActionMenu(item, category, subCat.name);
                                     }, 700);
                                 };
                                 const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
@@ -1272,7 +1749,7 @@ export function AddEntryView() {
                         if (combinedItems.some(item => !defaultItems.includes(item))) {
                             const hintText = document.createElement('p');
                             hintText.className = 'text-xs text-center text-gray-500 pt-3';
-                            hintText.textContent = '提示：長按自訂的項目可將其刪除。';
+                            hintText.textContent = '提示：長按自訂的項目可修改或刪除。';
                             quickAddContainer.appendChild(hintText);
                         }
 
@@ -1382,11 +1859,14 @@ export function AddEntryView() {
             // Fetch location name (reverse geocoding)
             const geoResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=zh-TW`);
             if (!geoResponse.ok) {
-                const errorText = await geoResponse.text().catch(() => '無法讀取錯誤內容');
-                throw new Error(`地點服務錯誤 (${geoResponse.status}): ${errorText}`);
+                const errorText = await geoResponse.text().catch(() => `Status: ${geoResponse.status}`);
+                throw new Error(`地點服務錯誤: ${errorText}`);
             }
             const geoData = await geoResponse.json();
-            if (!geoData || !geoData.address) {
+            if (geoData.error) {
+                throw new Error(geoData.error);
+            }
+            if (!geoData.address) {
                 throw new Error('無法從座標解析地點，請稍後再試');
             }
             const location = geoData.address.city || geoData.address.town || geoData.address.village || '未知地點';
@@ -1394,10 +1874,13 @@ export function AddEntryView() {
             // Fetch weather
             const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code`);
             if (!weatherResponse.ok) {
-                const errorText = await weatherResponse.text().catch(() => '無法讀取錯誤內容');
-                throw new Error(`天氣服務錯誤 (${weatherResponse.status}): ${errorText}`);
+                const errorText = await weatherResponse.text().catch(() => `Status: ${weatherResponse.status}`);
+                throw new Error(`天氣服務錯誤: ${errorText}`);
             }
             const weatherData = await weatherResponse.json();
+            if (weatherData.error && weatherData.reason) {
+                throw new Error(weatherData.reason);
+            }
             if (!weatherData || !weatherData.current || typeof weatherData.current.temperature_2m === 'undefined' || typeof weatherData.current.weather_code === 'undefined') {
                  throw new Error('天氣資料格式不正確，請稍後再試');
             }
@@ -1415,12 +1898,14 @@ export function AddEntryView() {
 
         } catch (error) {
             console.error("無法取得每日資訊:", error);
-
+            
             let finalMessage = '無法取得地點與天氣資訊，請稍後再試。';
 
+            // Handle various error types to get a user-friendly message
             if (error && typeof error === 'object') {
                 const err = error;
-                // GeolocationPositionError has priority.
+                
+                // 1. GeolocationPositionError (has .code and .message)
                 if (typeof err.code === 'number' && typeof err.message === 'string') {
                     switch (err.code) {
                         case 1: finalMessage = '請開啟定位權限以取得天氣資訊'; break;
@@ -1428,20 +1913,24 @@ export function AddEntryView() {
                         case 3: finalMessage = '取得位置資訊逾時'; break;
                         default: finalMessage = `定位錯誤 (${err.code}): ${err.message}`; break;
                     }
+                // 2. Standard Error objects (have .message)
                 } else if (typeof err.message === 'string' && err.message) {
                     finalMessage = err.message;
+                // 3. API-specific error objects as a fallback
+                } else if (typeof err.reason === 'string' && err.reason) {
+                    finalMessage = err.reason;
                 } else if (typeof err.error === 'string' && err.error) {
                     finalMessage = err.error;
                 }
-            } else if (typeof error === 'string' && error) {
-                finalMessage = error;
+            } else if (error) {
+                finalMessage = String(error);
             }
             
-            // Sanitize common network errors and garbage responses
+            // Sanitize common network errors and final garbage responses
             const lowerCaseMessage = finalMessage.toLowerCase();
             if (lowerCaseMessage.includes('failed to fetch') || lowerCaseMessage.includes('networkerror')) {
                 finalMessage = '網路連線失敗，請檢查您的網路連線。';
-            } else if (finalMessage.includes('[object Object]')) {
+            } else if (finalMessage.includes('[object object]')) {
                 finalMessage = '收到來自伺服器的無效回應。';
             }
             

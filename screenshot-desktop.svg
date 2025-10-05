@@ -1,7 +1,0 @@
-<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="1280" height="720" fill="#f2f2f7"/>
-<rect x="40" y="40" width="1200" height="80" rx="10" fill="white"/>
-<text x="640" y="85" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="32" font-weight="bold" fill="black">統計分析</text>
-<rect x="40" y="140" width="1200" height="540" rx="10" fill="white"/>
-<text x="640" y="410" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="48" fill="#ccc">圖表示意</text>
-</svg>

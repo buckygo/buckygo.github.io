@@ -1,5 +1,5 @@
 // The version of the cache. A new version triggers the install event.
-const CACHE_NAME = 'tic-tracker-cache-v8';
+const CACHE_NAME = 'tic-tracker-cache-v10';
 
 // The URLs that should be cached for the app to work offline.
 const URLS_TO_CACHE = [
@@ -12,11 +12,9 @@ const URLS_TO_CACHE = [
   'components.js',
   'charts.js',
   'manifest.json',
-  'icon-192x192.svg',
-  'icon-512x512.svg',
-  'maskable-icon.svg',
-  'screenshot-mobile.svg',
-  'screenshot-desktop.svg',
+  'icon-192x192.png',
+  'icon-512x512.png',
+  'maskable-icon.png',
   'https://cdn.tailwindcss.com',
   'https://d3js.org/d3.v7.min.js',
   'https://esm.run/@google/genai'

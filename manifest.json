@@ -8,38 +8,27 @@
   "orientation": "portrait-primary",
   "background_color": "#f3f4f6",
   "theme_color": "#ffffff",
+  "categories": [
+    "health",
+    "lifestyle"
+  ],
+  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "icon-192x192.svg",
+      "src": "icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png"
     },
     {
-      "src": "icon-512x512.svg",
+      "src": "icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png"
     },
     {
-      "src": "maskable-icon.svg",
+      "src": "maskable-icon.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "screenshot-mobile.svg",
-      "sizes": "540x960",
-      "type": "image/svg+xml",
-      "form_factor": "narrow",
-      "label": "Mobile Screenshot of Daily Log"
-    },
-    {
-      "src": "screenshot-desktop.svg",
-      "sizes": "1280x720",
-      "type": "image/svg+xml",
-      "form_factor": "wide",
-      "label": "Desktop Screenshot of Statistics View"
     }
   ]
 }
