@@ -1,3 +1,5 @@
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -11,11 +13,16 @@ import {
     updateEntry,
     saveCustomItems,
     setDailyInfo,
+    updateBasicInfo,
+    setState,
     CATEGORY_CONFIG,
     SUBCATEGORIES,
+    getBMICategory,
+    updateBasicInfoHistoryEntry,
+    deleteBasicInfoHistoryEntry,
 } from './state.js';
-import type { Category, LogEntry, SubCategoryGroup, DailyInfo } from './state';
-import { renderStackedBarChart, renderBarChart, renderPieChart, renderComboChart } from './charts.js';
+import type { Category, LogEntry, SubCategoryGroup, DailyInfo, BasicInfoEntry, BasicInfo } from './state';
+import { renderStackedBarChart, renderBarChart, renderPieChart, renderComboChart, renderGrowthChart } from './charts.js';
 
 // FIX: Declare d3 to inform TypeScript that it exists as a global variable.
 declare const d3: any;
@@ -81,6 +88,103 @@ function getWeatherDisplayInfo(code: number): { icon: string; description: strin
     if ([85, 86].includes(code)) return { icon: '🌨️', description: '陣雪' };
     if ([95, 96, 99].includes(code)) return { icon: '⛈️', description: '雷雨' };
     return { icon: '🌡️', description: '未知' };
+}
+
+function createSleepInputUI(bedtime: string = '22:00', waketime: string = '07:00'): HTMLElement {
+    const sleepContainer = document.createElement('div');
+    sleepContainer.className = 'space-y-4 pt-2';
+    sleepContainer.innerHTML = `
+        <div>
+            <label for="bedtime" class="block text-sm font-medium text-gray-700">就寢時間</label>
+            <input type="time" id="bedtime" value="${bedtime}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg p-2">
+        </div>
+        <div>
+            <label for="waketime" class="block text-sm font-medium text-gray-700">起床時間</label>
+            <input type="time" id="waketime" value="${waketime}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 text-lg p-2">
+        </div>
+    `;
+    return sleepContainer;
+}
+
+export function showBasicInfoModal({ isAdding = false }: { isAdding?: boolean } = {}) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4 animate-fade-in-fast';
+
+    const panel = document.createElement('div');
+    panel.className = 'bg-white rounded-xl shadow-xl w-full max-w-sm animate-slide-up flex flex-col';
+
+    const header = document.createElement('div');
+    header.className = 'p-4 border-b flex items-center justify-between';
+    header.innerHTML = `<h3 class="font-semibold text-center text-lg text-gray-800">${isAdding ? '新增基本資料' : '編輯基本資料'}</h3>`;
+    const closeButton = document.createElement('button');
+    closeButton.className = 'p-1 text-gray-500 hover:text-gray-800 rounded-full';
+    closeButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
+    closeButton.onclick = () => overlay.remove();
+    header.appendChild(closeButton);
+
+    const body = document.createElement('div');
+    body.className = 'p-4 space-y-4';
+    const info = isAdding ? {} : state.basicInfo;
+    
+    body.innerHTML = `
+        <div>
+            <label for="basic-age" class="block text-sm font-medium text-gray-700">年齡</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+                <input type="number" step="1" min="0" id="basic-age" value="${info.age ?? ''}" class="block w-full rounded-md border-gray-300 pl-3 pr-12 focus:border-indigo-500 focus:ring-indigo-500 text-lg p-2" placeholder="請輸入年齡">
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3"><span class="text-gray-500">歲</span></div>
+            </div>
+        </div>
+        <div>
+            <label for="basic-height" class="block text-sm font-medium text-gray-700">身高</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+                <input type="number" step="0.1" min="0" id="basic-height" value="${info.height ?? ''}" class="block w-full rounded-md border-gray-300 pl-3 pr-16 focus:border-indigo-500 focus:ring-indigo-500 text-lg p-2" placeholder="請輸入身高">
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3"><span class="text-gray-500">公分</span></div>
+            </div>
+        </div>
+        <div>
+            <label for="basic-weight" class="block text-sm font-medium text-gray-700">體重</label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+                <input type="number" step="0.1" min="0" id="basic-weight" value="${info.weight ?? ''}" class="block w-full rounded-md border-gray-300 pl-3 pr-16 focus:border-indigo-500 focus:ring-indigo-500 text-lg p-2" placeholder="請輸入體重">
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3"><span class="text-gray-500">公斤</span></div>
+            </div>
+        </div>
+    `;
+
+    const footer = document.createElement('div');
+    footer.className = 'p-3 bg-gray-50 flex justify-end';
+
+    const saveButton = document.createElement('button');
+    saveButton.className = 'px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition';
+    saveButton.textContent = '儲存';
+    saveButton.onclick = () => {
+        const ageInput = panel.querySelector<HTMLInputElement>('#basic-age');
+        const heightInput = panel.querySelector<HTMLInputElement>('#basic-height');
+        const weightInput = panel.querySelector<HTMLInputElement>('#basic-weight');
+        
+        const getVal = (input: HTMLInputElement | null): number | undefined => {
+            if (!input || input.value.trim() === '') return undefined;
+            const num = parseFloat(input.value);
+            return isNaN(num) ? undefined : num;
+        };
+
+        const newInfo = {
+            age: getVal(ageInput),
+            height: getVal(heightInput),
+            weight: getVal(weightInput),
+        };
+        updateBasicInfo(newInfo, isAdding);
+        overlay.remove();
+    };
+
+    footer.appendChild(saveButton);
+    panel.appendChild(header);
+    panel.appendChild(body);
+    panel.appendChild(footer);
+    overlay.onclick = (e) => {
+        if (e.target === overlay) overlay.remove();
+    };
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
 }
 
 export function DailyLogView(): HTMLElement {
@@ -205,6 +309,7 @@ export function DailyLogView(): HTMLElement {
                 initialContent = match[2];
             }
         }
+        
         initialContent.split(', ').forEach(item => {
             if (item.trim()) selectedItems.add(item.trim());
         });
@@ -212,6 +317,9 @@ export function DailyLogView(): HTMLElement {
         const modalOverlay = document.createElement('div');
         const modalPanel = document.createElement('div');
         let selectionPreviewContainer: HTMLDivElement | null = null;
+        const footer = document.createElement('div');
+        const confirmButton = document.createElement('button');
+        
         const closeModal = () => modalOverlay.remove();
         
         const showDeleteItemConfirmation = (itemName: string, cat: Category, subCatName: string) => {
@@ -557,6 +665,12 @@ export function DailyLogView(): HTMLElement {
             if (!selectionPreviewContainer) return;
             selectionPreviewContainer.innerHTML = '';
             
+            if (category === '健康' && viewingSubCategoryItems === '睡眠') {
+                selectionPreviewContainer.className = 'p-3 border-b border-gray-200 bg-white text-center text-gray-500 text-sm';
+                selectionPreviewContainer.textContent = '請輸入就寢與起床時間';
+                return;
+            }
+
             if (selectedItems.size === 0) {
                 selectionPreviewContainer.className = 'p-3 border-b border-gray-200 bg-white text-center text-gray-500 text-sm';
                 selectionPreviewContainer.textContent = '尚未選擇任何項目';
@@ -610,7 +724,7 @@ export function DailyLogView(): HTMLElement {
                     backButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>`;
                     backButton.onclick = onBackClick;
                 } else {
-                    backButton.className = 'w-8 h-8';
+                    backButton.className = 'w-8 h-8'; // Placeholder for alignment
                 }
                 const headerTitle = document.createElement('p');
                 headerTitle.className = 'flex-grow text-center font-bold text-gray-800 text-lg';
@@ -629,6 +743,7 @@ export function DailyLogView(): HTMLElement {
             const modalBody = document.createElement('div');
             modalBody.className = 'p-4 overflow-y-auto custom-scrollbar flex-grow';
 
+            // FIX: Add date/time inputs for editing.
             const dateTimeContainer = document.createElement('div');
             dateTimeContainer.className = 'grid grid-cols-2 gap-3 mb-4';
             const entryDate = new Date(timestamp);
@@ -640,7 +755,7 @@ export function DailyLogView(): HTMLElement {
             dateInput.className = 'w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500';
             dateInput.value = entryDate.toISOString().split('T')[0];
             dateInputContainer.appendChild(dateInput);
-            
+
             const timeInputContainer = document.createElement('div');
             timeInputContainer.innerHTML = `<label for="edit-time" class="block text-xs font-medium text-gray-600 mb-1">時間</label>`;
             const timeInput = document.createElement('input');
@@ -652,138 +767,49 @@ export function DailyLogView(): HTMLElement {
             
             dateTimeContainer.appendChild(dateInputContainer);
             dateTimeContainer.appendChild(timeInputContainer);
-            modalBody.appendChild(dateTimeContainer);
 
-            if (category === '飲食' && !selectedMealType) {
-                modalPanel.appendChild(createPanelHeader('選擇餐別'));
-                const mealTypes = ['早餐', '中餐', '晚餐', '點心'];
-                const mealTypeContainer = document.createElement('div');
-                mealTypeContainer.className = 'grid grid-cols-2 gap-3 mt-2';
-                mealTypes.forEach(meal => {
-                    const mealButton = document.createElement('button');
-                    mealButton.className = 'p-4 bg-green-100 text-green-800 font-semibold rounded-lg hover:bg-green-200 transition';
-                    mealButton.textContent = meal;
-                    mealButton.onclick = () => {
-                        selectedMealType = meal;
-                        renderModalContent();
-                    };
-                    mealTypeContainer.appendChild(mealButton);
-                });
-                modalBody.appendChild(mealTypeContainer);
-            } else {
-                 let headerTitle;
-                let backAction: (() => void) | undefined = undefined;
-
-                if (category === '飲食' && selectedMealType) {
-                    headerTitle = `編輯 ${selectedMealType} 內容`;
-                    backAction = () => {
-                        selectedMealType = null;
-                        viewingSubCategoryItems = null;
-                        renderModalContent();
-                    };
-                } else {
-                    headerTitle = `編輯 ${category}`;
+            if (viewingSubCategoryItems) {
+                // This is the ITEM list view.
+                let fullTitle = `${category} > ${viewingSubCategoryItems}`;
+                 if (category === '飲食' && selectedMealType) {
+                    fullTitle = `${selectedMealType} > ${viewingSubCategoryItems}`;
+                }
+                if (fullTitle.length > 18) {
+                    fullTitle = `... > ${viewingSubCategoryItems}`;
                 }
 
-                if (viewingSubCategoryItems) {
-                    let fullTitle = `${headerTitle} > ${viewingSubCategoryItems}`;
-                    if (fullTitle.length > 18) {
-                        fullTitle = `... > ${viewingSubCategoryItems}`;
-                    }
-                    modalPanel.appendChild(createPanelHeader(fullTitle, () => {
-                        viewingSubCategoryItems = null;
-                        renderModalContent();
-                    }));
-                } else {
-                    modalPanel.appendChild(createPanelHeader(headerTitle, backAction));
+                modalPanel.appendChild(createPanelHeader(fullTitle, () => {
+                    viewingSubCategoryItems = null;
+                    renderModalContent();
+                }));
+                 
+                if (category !== '健康' || viewingSubCategoryItems !== '睡眠') {
+                    modalBody.appendChild(dateTimeContainer);
                 }
 
                 const quickAddContainer = document.createElement('div');
                 quickAddContainer.className = 'space-y-2';
 
-                if (!viewingSubCategoryItems) {
-                    const defaultSubCats = SUBCATEGORIES[category];
-                    const customSubCats = customItems[category] || [];
-                    const combinedSubCats = [...defaultSubCats];
-                    customSubCats.forEach(customSC => {
-                        if (!combinedSubCats.some(defaultSC => defaultSC.name === customSC.name)) {
-                            combinedSubCats.push(customSC);
+                const allDefaultSubCats = SUBCATEGORIES[category] || [];
+                const allCustomSubCats = customItems[category] || [];
+                const subCat = [...allDefaultSubCats, ...allCustomSubCats].find(sc => sc.name === viewingSubCategoryItems);
+
+                if (subCat) {
+                     if (category === '健康' && subCat.name === '睡眠') {
+                        // FIX: Initialize sleep UI with existing entry data if available
+                        const match = entry.content.match(/\((\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})\)/);
+                        let bedtimeValue = '22:00';
+                        let waketimeValue = '07:00';
+                        if (match) {
+                           bedtimeValue = match[1];
+                           waketimeValue = match[2];
                         }
-                    });
-
-                    combinedSubCats.forEach(subCat => {
-                        const subCatButton = document.createElement('button');
-                        subCatButton.className = 'w-full text-left p-3 bg-gray-100 rounded-lg hover:bg-gray-200 font-semibold text-gray-700 flex justify-between items-center transition';
-                        subCatButton.innerHTML = `<span>${subCat.name}</span><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 text-gray-400"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>`;
-                        
-                        const isDefaultSubCat = SUBCATEGORIES[category].some(sc => sc.name === subCat.name);
-                        const isDeletable = !isDefaultSubCat;
-
-                        subCatButton.onclick = () => {
-                            viewingSubCategoryItems = subCat.name;
-                            renderModalContent();
-                        };
-
-                        if (isDeletable) {
-                            let pressTimer: number | null = null;
-                            let longPressTriggered = false;
-
-                            const startPress = (e: Event) => {
-                                longPressTriggered = false;
-                                pressTimer = window.setTimeout(() => {
-                                    longPressTriggered = true;
-                                    if ('vibrate' in navigator) { navigator.vibrate(50); }
-                                    showSubCategoryActionMenu(subCat.name, category);
-                                }, 700);
-                            };
-
-                            const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
-                            
-                            subCatButton.addEventListener('mousedown', startPress);
-                            subCatButton.addEventListener('touchstart', startPress, { passive: true });
-                            subCatButton.addEventListener('mouseup', cancelPress);
-                            subCatButton.addEventListener('mouseleave', cancelPress);
-                            subCatButton.addEventListener('touchend', cancelPress);
-                            subCatButton.addEventListener('touchcancel', cancelPress);
-                            subCatButton.addEventListener('click', (e) => { if (longPressTriggered) { e.preventDefault(); e.stopPropagation(); } }, true);
-                        }
-                        quickAddContainer.appendChild(subCatButton);
-                    });
-                    
-                    const customSubCatExists = combinedSubCats.some(sc => !SUBCATEGORIES[category].some(dsc => dsc.name === sc.name));
-                    if (customSubCatExists) {
-                        const hintText = document.createElement('p');
-                        hintText.className = 'text-xs text-center text-gray-500 pt-2';
-                        hintText.textContent = '提示：長按自訂的子分類可修改或刪除。';
-                        quickAddContainer.appendChild(hintText);
-                    }
-
-                    const addSubCategoryButton = document.createElement('button');
-                    addSubCategoryButton.className = 'w-full text-left p-3 mt-2 bg-gray-50 border border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-100 hover:border-gray-500 hover:text-gray-800 font-semibold flex items-center justify-center transition';
-                    addSubCategoryButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>新增子分類...`;
-                    addSubCategoryButton.onclick = () => {
-                        showCustomInputModal((newText) => {
-                            const newSubCatName = newText.trim();
-                            if (newSubCatName) {
-                                if (!customItems[category]) { customItems[category] = []; }
-                                const exists = SUBCATEGORIES[category].some(sc => sc.name === newSubCatName) || customItems[category].some(sc => sc.name === newSubCatName);
-                                if (!exists) {
-                                    customItems[category].push({ name: newSubCatName, items: [] });
-                                    saveCustomItems();
-                                    viewingSubCategoryItems = newSubCatName;
-                                    renderModalContent();
-                                }
-                            }
-                        }, '新增子分類');
-                    };
-                    quickAddContainer.appendChild(addSubCategoryButton);
-
-                } else {
-                    const subCat = [...(SUBCATEGORIES[category] || []), ...(customItems[category] || [])].find(sc => sc.name === viewingSubCategoryItems);
-
-                    if (subCat) {
+                        quickAddContainer.appendChild(createSleepInputUI(bedtimeValue, waketimeValue));
+                        confirmButton.disabled = false;
+                    } else {
                         const defaultItems = (SUBCATEGORIES[category].find(sc => sc.name === subCat.name)?.items || []).sort();
-                        const customItemEntries = (customItems[category]?.find(sc => sc.name === subCat.name)?.items || []);
+                        const customSubCat = customItems[category]?.find(sc => sc.name === subCat.name);
+                        const customItemEntries = customSubCat?.items || [];
                         const combinedItems = [...new Set([...defaultItems, ...customItemEntries])];
                         
                         const itemsGrid = document.createElement('div');
@@ -808,6 +834,7 @@ export function DailyLogView(): HTMLElement {
                             if (isCustom) {
                                 let pressTimer: number | null = null;
                                 let longPressTriggered = false;
+
                                 const startPress = (e: Event) => {
                                     longPressTriggered = false;
                                     pressTimer = window.setTimeout(() => {
@@ -823,13 +850,16 @@ export function DailyLogView(): HTMLElement {
                                 itemButton.addEventListener('mouseleave', cancelPress);
                                 itemButton.addEventListener('touchend', cancelPress);
                                 itemButton.addEventListener('touchcancel', cancelPress);
-                                itemButton.addEventListener('click', (e) => { if (longPressTriggered) { e.preventDefault(); e.stopPropagation(); } }, true);
+                                itemButton.addEventListener('click', (e) => {
+                                    if (longPressTriggered) { e.preventDefault(); e.stopPropagation(); }
+                                }, true);
                             }
 
                             if (item === lastAddedItem) {
                                 itemButton.classList.add('new-item-highlight');
                                 lastAddedItem = null;
                             }
+                            
                             itemsGrid.appendChild(itemButton);
                         });
                         
@@ -863,7 +893,115 @@ export function DailyLogView(): HTMLElement {
                             });
                         };
                         quickAddContainer.appendChild(addCustomItemButton);
+                        confirmButton.disabled = selectedItems.size === 0;
                     }
+                }
+                modalBody.appendChild(quickAddContainer);
+            } else {
+                // This is the SUBCATEGORY list view.
+                let headerTitle: string;
+                let subCatsToShow: SubCategoryGroup[];
+                let onBackClick: (() => void) | undefined = undefined;
+
+                if (category === '飲食' && selectedMealType) {
+                    headerTitle = `記錄 ${selectedMealType} 內容`;
+                    subCatsToShow = [...(SUBCATEGORIES[category] || []), ...(customItems[category] || [])];
+                    onBackClick = () => {
+                        selectedMealType = null;
+                        renderModalContent();
+                    };
+                } else if (category === '飲食' && !selectedMealType) {
+                    headerTitle = '選擇餐別';
+                    subCatsToShow = [
+                        { name: '早餐', items: [] },
+                        { name: '中餐', items: [] },
+                        { name: '晚餐', items: [] },
+                        { name: '點心', items: [] },
+                    ];
+                } else {
+                    headerTitle = `記錄 ${category}`;
+                    subCatsToShow = [...(SUBCATEGORIES[category] || []), ...(customItems[category] || [])];
+                }
+
+                modalPanel.appendChild(createPanelHeader(headerTitle, onBackClick));
+                modalBody.appendChild(dateTimeContainer);
+                
+                const quickAddContainer = document.createElement('div');
+                quickAddContainer.className = 'space-y-2';
+
+                subCatsToShow.forEach(subCat => {
+                    const subCatButton = document.createElement('button');
+                    subCatButton.className = 'w-full text-left p-3 bg-gray-100 rounded-lg hover:bg-gray-200 font-semibold text-gray-700 flex justify-between items-center transition';
+                    subCatButton.innerHTML = `<span>${subCat.name}</span><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 text-gray-400"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>`;
+                    
+                    subCatButton.onclick = () => {
+                        if (category === '飲食' && !selectedMealType) {
+                            selectedMealType = subCat.name;
+                        } else {
+                            viewingSubCategoryItems = subCat.name;
+                        }
+                        renderModalContent();
+                    };
+
+                    const isDefaultDietSubCat = category === '飲食' && !selectedMealType;
+                    const defaultSubCatsForCategory = SUBCATEGORIES[category] || [];
+                    const isDefaultSubCat = defaultSubCatsForCategory.some(sc => sc.name === subCat.name);
+
+                    if (!isDefaultDietSubCat && !isDefaultSubCat) { // is a custom subcategory
+                        let pressTimer: number | null = null;
+                        let longPressTriggered = false;
+
+                        const startPress = (e: Event) => {
+                            longPressTriggered = false;
+                            pressTimer = window.setTimeout(() => {
+                                longPressTriggered = true;
+                                if ('vibrate' in navigator) { navigator.vibrate(50); }
+                                showSubCategoryActionMenu(subCat.name, category);
+                            }, 700);
+                        };
+
+                        const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+                        subCatButton.addEventListener('mousedown', startPress);
+                        subCatButton.addEventListener('touchstart', startPress, { passive: true });
+                        subCatButton.addEventListener('mouseup', cancelPress);
+                        subCatButton.addEventListener('mouseleave', cancelPress);
+                        subCatButton.addEventListener('touchend', cancelPress);
+                        subCatButton.addEventListener('touchcancel', cancelPress);
+                        subCatButton.addEventListener('click', (e) => { if (longPressTriggered) { e.preventDefault(); e.stopPropagation(); } }, true);
+                    }
+                    quickAddContainer.appendChild(subCatButton);
+                });
+
+                const combinedSubCats = [...(SUBCATEGORIES[category] || []), ...(customItems[category] || [])];
+                const customSubCatExists = combinedSubCats.some(sc => !(SUBCATEGORIES[category] || []).some(dsc => dsc.name === sc.name));
+                if (customSubCatExists) {
+                    const hintText = document.createElement('p');
+                    hintText.className = 'text-xs text-center text-gray-500 pt-2';
+                    hintText.textContent = '提示：長按自訂的子分類可修改或刪除。';
+                    quickAddContainer.appendChild(hintText);
+                }
+
+                 if (category !== '飲食' || (category === '飲食' && selectedMealType)) {
+                    const addSubCategoryButton = document.createElement('button');
+                    addSubCategoryButton.className = 'w-full text-left p-3 mt-2 bg-gray-50 border border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-100 hover:border-gray-500 hover:text-gray-800 font-semibold flex items-center justify-center transition';
+                    addSubCategoryButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>新增子分類...`;
+                    addSubCategoryButton.onclick = () => {
+                        showCustomInputModal((newText) => {
+                            const newSubCatName = newText.trim();
+                            if (newSubCatName) {
+                                if (!customItems[category]) { customItems[category] = []; }
+                                const existsInDefault = (SUBCATEGORIES[category] || []).some(sc => sc.name === newSubCatName);
+                                const existsInCustom = (customItems[category] || []).some(sc => sc.name === newSubCatName);
+                                if (!existsInDefault && !existsInCustom) {
+                                    customItems[category].push({ name: newSubCatName, items: [] });
+                                    saveCustomItems();
+                                    viewingSubCategoryItems = newSubCatName;
+                                    renderModalContent();
+                                }
+                            }
+                        }, '新增子分類');
+                    };
+                    quickAddContainer.appendChild(addSubCategoryButton);
                 }
                 modalBody.appendChild(quickAddContainer);
             }
@@ -872,29 +1010,70 @@ export function DailyLogView(): HTMLElement {
                 selectionPreviewContainer = document.createElement('div');
             }
             updateSelectionPreview();
-
-            const footer = document.createElement('div');
-            footer.className = 'p-4 border-t border-gray-200 bg-white flex-shrink-0';
-            const confirmButton = document.createElement('button');
-            confirmButton.className = 'w-full py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition disabled:bg-gray-300';
-            confirmButton.textContent = '儲存變更';
-            confirmButton.disabled = selectedItems.size === 0;
-            confirmButton.onclick = () => {
-                let newContent = Array.from(selectedItems).join(', ');
-                if (!newContent) { return; }
-                if (category === '飲食' && selectedMealType) {
-                    newContent = `${selectedMealType}: ${newContent}`;
-                }
-                const newTimestamp = new Date(`${(dateInput as HTMLInputElement).value}T${(timeInput as HTMLInputElement).value}`).getTime();
-                updateEntry(id, { content: newContent, timestamp: newTimestamp });
-                closeModal();
-            };
-
-            footer.appendChild(confirmButton);
+            
             modalPanel.appendChild(selectionPreviewContainer);
             modalPanel.appendChild(modalBody);
             modalPanel.appendChild(footer);
         };
+
+        footer.className = 'p-4 border-t border-gray-200 bg-white flex-shrink-0';
+        confirmButton.className = 'w-full py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition disabled:bg-gray-300';
+        // FIX: Correct button text for editing.
+        confirmButton.textContent = '儲存變更';
+        confirmButton.disabled = selectedItems.size === 0 && !(category === '健康' && viewingSubCategoryItems === '睡眠');
+
+        // FIX: Overhaul of confirm button logic for editing.
+        confirmButton.onclick = () => {
+            let newContent = '';
+            let newTimestamp: number;
+
+            if (category === '健康' && viewingSubCategoryItems === '睡眠') {
+                const bedtimeInput = modalPanel.querySelector<HTMLInputElement>('#bedtime');
+                const waketimeInput = modalPanel.querySelector<HTMLInputElement>('#waketime');
+                const dateInput = modalPanel.querySelector<HTMLInputElement>('#edit-date');
+                if (bedtimeInput && waketimeInput && dateInput) {
+                    const bedtimeValue = bedtimeInput.value;
+                    const waketimeValue = waketimeInput.value;
+                    const dateValue = dateInput.value;
+                    
+                    const wakeUpDate = new Date(`${dateValue}T${waketimeValue}`);
+                    let bedTimeDate = new Date(`${dateValue}T${bedtimeValue}`);
+
+                    if (wakeUpDate < bedTimeDate) {
+                        bedTimeDate.setDate(bedTimeDate.getDate() - 1);
+                    }
+
+                    const durationMs = wakeUpDate.getTime() - bedTimeDate.getTime();
+                    const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+                    const durationMinutes = Math.round((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+                    
+                    newContent = `睡眠 ${durationHours}小時${durationMinutes}分鐘 (${bedtimeValue} - ${waketimeValue})`;
+                    newTimestamp = wakeUpDate.getTime();
+                } else {
+                    return; 
+                }
+            } else {
+                newContent = Array.from(selectedItems).join(', ');
+                if (category === '飲食' && selectedMealType) {
+                    newContent = `${selectedMealType}: ${newContent}`;
+                }
+                const dateInput = modalPanel.querySelector<HTMLInputElement>('#edit-date');
+                const timeInput = modalPanel.querySelector<HTMLInputElement>('#edit-time');
+                if (dateInput && timeInput) {
+                    newTimestamp = new Date(`${dateInput.value}T${timeInput.value}`).getTime();
+                } else {
+                    // Fallback to original timestamp if inputs are not found.
+                    newTimestamp = timestamp;
+                }
+            }
+
+            if (newContent) {
+                updateEntry(id, { content: newContent, timestamp: newTimestamp });
+            }
+            closeModal();
+        };
+
+        footer.appendChild(confirmButton);
         
         modalOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center animate-fade-in-fast';
         modalOverlay.onclick = (e) => {
@@ -902,11 +1081,11 @@ export function DailyLogView(): HTMLElement {
         };
 
         modalPanel.className = 'bg-gray-50 w-full max-w-md h-[90vh] flex flex-col rounded-t-2xl animate-slide-up';
+        
         modalOverlay.appendChild(modalPanel);
         document.body.appendChild(modalOverlay);
         renderModalContent();
     };
-
 
     const showActionMenu = (entry: LogEntry) => {
         const overlay = document.createElement('div');
@@ -1067,12 +1246,13 @@ export function DailyLogView(): HTMLElement {
   return container;
 }
 
+// FIX: Move selectedDate to module scope to fix scoping issues that cause compile errors.
+let selectedDate = new Date().toISOString().split('T')[0];
+
 export function AddEntryView(): HTMLElement {
     const container = document.createElement('div');
     container.className = 'p-4 space-y-5';
     
-    let selectedDate: string = new Date().toISOString().split('T')[0];
-
     const showCustomInputModal = (onConfirm: (text: string) => void, title: string = '新增自訂項目') => {
         const overlay = document.createElement('div');
         overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4 animate-fade-in-fast';
@@ -1135,6 +1315,8 @@ export function AddEntryView(): HTMLElement {
 
         const modalOverlay = document.createElement('div');
         const modalPanel = document.createElement('div');
+        const footer = document.createElement('div');
+        const confirmButton = document.createElement('button');
 
         let selectionPreviewContainer: HTMLDivElement | null = null;
         
@@ -1359,20 +1541,18 @@ export function AddEntryView(): HTMLElement {
         const showEditCustomItemModal = (oldItemName: string, category: Category, subCatName: string) => {
             const onConfirm = (newItemName: string) => {
                 if (!customItems[category]) return;
-                let targetSubCat = customItems[category].find(sc => sc.name === subCatName);
-                if (!targetSubCat) { 
-                    targetSubCat = { name: subCatName, items: [] };
-                    customItems[category].push(targetSubCat);
-                }
-                const itemIndex = targetSubCat.items.indexOf(oldItemName);
-                if (itemIndex > -1) {
-                    targetSubCat.items[itemIndex] = newItemName;
-                    if (selectedItems.has(oldItemName)) {
-                        selectedItems.delete(oldItemName);
-                        selectedItems.add(newItemName);
+                const targetSubCat = customItems[category].find(sc => sc.name === subCatName);
+                if (targetSubCat) {
+                    const itemIndex = targetSubCat.items.indexOf(oldItemName);
+                    if (itemIndex > -1) {
+                        targetSubCat.items[itemIndex] = newItemName;
+                        if (selectedItems.has(oldItemName)) {
+                            selectedItems.delete(oldItemName);
+                            selectedItems.add(newItemName);
+                        }
+                        saveCustomItems();
+                        renderModalContent();
                     }
-                    saveCustomItems();
-                    renderModalContent();
                 }
             };
             
@@ -1485,6 +1665,12 @@ export function AddEntryView(): HTMLElement {
             if (!selectionPreviewContainer) return;
             selectionPreviewContainer.innerHTML = '';
             
+            if (category === '健康' && viewingSubCategoryItems === '睡眠') {
+                selectionPreviewContainer.className = 'p-3 border-b border-gray-200 bg-white text-center text-gray-500 text-sm';
+                selectionPreviewContainer.textContent = '請輸入就寢與起床時間';
+                return;
+            }
+
             if (selectedItems.size === 0) {
                 selectionPreviewContainer.className = 'p-3 border-b border-gray-200 bg-white text-center text-gray-500 text-sm';
                 selectionPreviewContainer.textContent = '尚未選擇任何項目';
@@ -1557,143 +1743,33 @@ export function AddEntryView(): HTMLElement {
             const modalBody = document.createElement('div');
             modalBody.className = 'p-4 overflow-y-auto custom-scrollbar flex-grow';
 
-            if (category === '飲食' && !selectedMealType) {
-                modalPanel.appendChild(createPanelHeader('選擇餐別'));
-                const mealTypes = ['早餐', '中餐', '晚餐', '點心'];
-                const mealTypeContainer = document.createElement('div');
-                mealTypeContainer.className = 'grid grid-cols-2 gap-3 mt-2';
-                mealTypes.forEach(meal => {
-                    const mealButton = document.createElement('button');
-                    mealButton.className = 'p-4 bg-green-100 text-green-800 font-semibold rounded-lg hover:bg-green-200 transition';
-                    mealButton.textContent = meal;
-                    mealButton.onclick = () => {
-                        selectedMealType = meal;
-                        renderModalContent();
-                    };
-                    mealTypeContainer.appendChild(mealButton);
-                });
-                modalBody.appendChild(mealTypeContainer);
-            } else {
-                let headerTitle;
-                let backAction: (() => void) | undefined = undefined;
-
-                if (category === '飲食' && selectedMealType) {
-                    headerTitle = `記錄 ${selectedMealType} 內容`;
-                    backAction = () => {
-                        selectedMealType = null;
-                        viewingSubCategoryItems = null;
-                        renderModalContent();
-                    };
-                } else {
-                    headerTitle = `記錄 ${category}`;
+            if (viewingSubCategoryItems) {
+                // This is the ITEM list view.
+                let fullTitle = `${category} > ${viewingSubCategoryItems}`;
+                 if (category === '飲食' && selectedMealType) {
+                    fullTitle = `${selectedMealType} > ${viewingSubCategoryItems}`;
+                }
+                if (fullTitle.length > 18) {
+                    fullTitle = `... > ${viewingSubCategoryItems}`;
                 }
 
-                if (viewingSubCategoryItems) {
-                    let fullTitle = `${headerTitle} > ${viewingSubCategoryItems}`;
-                     // Shorten if too long
-                    if (fullTitle.length > 18) {
-                        fullTitle = `... > ${viewingSubCategoryItems}`;
-                    }
-                    modalPanel.appendChild(createPanelHeader(fullTitle, () => {
-                        viewingSubCategoryItems = null;
-                        renderModalContent();
-                    }));
-                } else {
-                    modalPanel.appendChild(createPanelHeader(headerTitle, backAction));
-                }
+                modalPanel.appendChild(createPanelHeader(fullTitle, () => {
+                    viewingSubCategoryItems = null;
+                    renderModalContent();
+                }));
 
                 const quickAddContainer = document.createElement('div');
                 quickAddContainer.className = 'space-y-2';
 
-                if (!viewingSubCategoryItems) {
-                    const defaultSubCats = SUBCATEGORIES[category];
-                    const customSubCats = customItems[category] || [];
-                    const combinedSubCats = [...defaultSubCats];
-                    customSubCats.forEach(customSC => {
-                        if (!combinedSubCats.some(defaultSC => defaultSC.name === customSC.name)) {
-                            combinedSubCats.push(customSC);
-                        }
-                    });
+                const allDefaultSubCats = SUBCATEGORIES[category] || [];
+                const allCustomSubCats = customItems[category] || [];
+                const subCat = [...allDefaultSubCats, ...allCustomSubCats].find(sc => sc.name === viewingSubCategoryItems);
 
-                    combinedSubCats.forEach(subCat => {
-                        const subCatButton = document.createElement('button');
-                        subCatButton.className = 'w-full text-left p-3 bg-gray-100 rounded-lg hover:bg-gray-200 font-semibold text-gray-700 flex justify-between items-center transition';
-                        subCatButton.innerHTML = `<span>${subCat.name}</span><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 text-gray-400"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>`;
-                        
-                        const isDefaultSubCat = SUBCATEGORIES[category].some(sc => sc.name === subCat.name);
-                        const isDeletable = !isDefaultSubCat;
-
-                        subCatButton.onclick = () => {
-                            viewingSubCategoryItems = subCat.name;
-                            renderModalContent();
-                        };
-
-                        if (isDeletable) {
-                            let pressTimer: number | null = null;
-                            let longPressTriggered = false;
-
-                            const startPress = (e: Event) => {
-                                longPressTriggered = false;
-                                pressTimer = window.setTimeout(() => {
-                                    longPressTriggered = true;
-                                    if ('vibrate' in navigator) { navigator.vibrate(50); }
-                                    showSubCategoryActionMenu(subCat.name, category);
-                                }, 700);
-                            };
-
-                            const cancelPress = () => {
-                                if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-                            };
-                            
-                            subCatButton.addEventListener('mousedown', startPress);
-                            subCatButton.addEventListener('touchstart', startPress, { passive: true });
-                            subCatButton.addEventListener('mouseup', cancelPress);
-                            subCatButton.addEventListener('mouseleave', cancelPress);
-                            subCatButton.addEventListener('touchend', cancelPress);
-                            subCatButton.addEventListener('touchcancel', cancelPress);
-                            
-                            subCatButton.addEventListener('click', (e) => {
-                                if (longPressTriggered) { e.preventDefault(); e.stopPropagation(); }
-                            }, true);
-                        }
-                        quickAddContainer.appendChild(subCatButton);
-                    });
-
-                    const customSubCatExists = combinedSubCats.some(sc => !SUBCATEGORIES[category].some(dsc => dsc.name === sc.name));
-                    if (customSubCatExists) {
-                        const hintText = document.createElement('p');
-                        hintText.className = 'text-xs text-center text-gray-500 pt-2';
-                        hintText.textContent = '提示：長按自訂的子分類可修改或刪除。';
-                        quickAddContainer.appendChild(hintText);
-                    }
-
-                    const addSubCategoryButton = document.createElement('button');
-                    addSubCategoryButton.className = 'w-full text-left p-3 mt-2 bg-gray-50 border border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-100 hover:border-gray-500 hover:text-gray-800 font-semibold flex items-center justify-center transition';
-                    addSubCategoryButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>新增子分類...`;
-                    addSubCategoryButton.onclick = () => {
-                        showCustomInputModal((newText) => {
-                            const newSubCatName = newText.trim();
-                            if (newSubCatName) {
-                                if (!customItems[category]) { customItems[category] = []; }
-                                const existsInDefault = SUBCATEGORIES[category].some(sc => sc.name === newSubCatName);
-                                const existsInCustom = customItems[category].some(sc => sc.name === newSubCatName);
-                                if (!existsInDefault && !existsInCustom) {
-                                    customItems[category].push({ name: newSubCatName, items: [] });
-                                    saveCustomItems();
-                                    viewingSubCategoryItems = newSubCatName;
-                                    renderModalContent();
-                                }
-                            }
-                        }, '新增子分類');
-                    };
-                    quickAddContainer.appendChild(addSubCategoryButton);
-
-                } else {
-                    const allDefaultSubCats = SUBCATEGORIES[category] || [];
-                    const allCustomSubCats = customItems[category] || [];
-                    const subCat = [...allDefaultSubCats, ...allCustomSubCats].find(sc => sc.name === viewingSubCategoryItems);
-
-                    if (subCat) {
+                if (subCat) {
+                     if (category === '健康' && subCat.name === '睡眠') {
+                        quickAddContainer.appendChild(createSleepInputUI());
+                        confirmButton.disabled = false;
+                    } else {
                         const defaultItems = (SUBCATEGORIES[category].find(sc => sc.name === subCat.name)?.items || []).sort();
                         const customSubCat = customItems[category]?.find(sc => sc.name === subCat.name);
                         const customItemEntries = customSubCat?.items || [];
@@ -1744,7 +1820,7 @@ export function AddEntryView(): HTMLElement {
 
                             if (item === lastAddedItem) {
                                 itemButton.classList.add('new-item-highlight');
-                                lastAddedItem = null; // Reset after applying
+                                lastAddedItem = null;
                             }
                             
                             itemsGrid.appendChild(itemButton);
@@ -1780,41 +1856,177 @@ export function AddEntryView(): HTMLElement {
                             });
                         };
                         quickAddContainer.appendChild(addCustomItemButton);
+                        confirmButton.disabled = selectedItems.size === 0;
                     }
                 }
                 modalBody.appendChild(quickAddContainer);
-            }
+            } else {
+                // This is the SUBCATEGORY list view.
+                let headerTitle: string;
+                let subCatsToShow: SubCategoryGroup[];
+                let onBackClick: (() => void) | undefined = undefined;
 
-            // --- FINAL ASSEMBLY of the modal panel ---
+                if (category === '飲食' && selectedMealType) {
+                    headerTitle = `記錄 ${selectedMealType} 內容`;
+                    subCatsToShow = [...(SUBCATEGORIES[category] || []), ...(customItems[category] || [])];
+                    onBackClick = () => {
+                        selectedMealType = null;
+                        renderModalContent();
+                    };
+                } else if (category === '飲食' && !selectedMealType) {
+                    headerTitle = '選擇餐別';
+                    subCatsToShow = [
+                        { name: '早餐', items: [] },
+                        { name: '中餐', items: [] },
+                        { name: '晚餐', items: [] },
+                        { name: '點心', items: [] },
+                    ];
+                } else {
+                    headerTitle = `記錄 ${category}`;
+                    subCatsToShow = [...(SUBCATEGORIES[category] || []), ...(customItems[category] || [])];
+                }
+
+                modalPanel.appendChild(createPanelHeader(headerTitle, onBackClick));
+                
+                const quickAddContainer = document.createElement('div');
+                quickAddContainer.className = 'space-y-2';
+
+                subCatsToShow.forEach(subCat => {
+                    const subCatButton = document.createElement('button');
+                    subCatButton.className = 'w-full text-left p-3 bg-gray-100 rounded-lg hover:bg-gray-200 font-semibold text-gray-700 flex justify-between items-center transition';
+                    subCatButton.innerHTML = `<span>${subCat.name}</span><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5 text-gray-400"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>`;
+                    
+                    subCatButton.onclick = () => {
+                        if (category === '飲食' && !selectedMealType) {
+                            selectedMealType = subCat.name;
+                        } else {
+                            viewingSubCategoryItems = subCat.name;
+                        }
+                        renderModalContent();
+                    };
+
+                    const isDefaultDietSubCat = category === '飲食' && !selectedMealType;
+                    const defaultSubCatsForCategory = SUBCATEGORIES[category] || [];
+                    const isDefaultSubCat = defaultSubCatsForCategory.some(sc => sc.name === subCat.name);
+
+                    if (!isDefaultDietSubCat && !isDefaultSubCat) { // is a custom subcategory
+                        let pressTimer: number | null = null;
+                        let longPressTriggered = false;
+
+                        const startPress = (e: Event) => {
+                            longPressTriggered = false;
+                            pressTimer = window.setTimeout(() => {
+                                longPressTriggered = true;
+                                if ('vibrate' in navigator) { navigator.vibrate(50); }
+                                showSubCategoryActionMenu(subCat.name, category);
+                            }, 700);
+                        };
+
+                        const cancelPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+                        subCatButton.addEventListener('mousedown', startPress);
+                        subCatButton.addEventListener('touchstart', startPress, { passive: true });
+                        subCatButton.addEventListener('mouseup', cancelPress);
+                        subCatButton.addEventListener('mouseleave', cancelPress);
+                        subCatButton.addEventListener('touchend', cancelPress);
+                        subCatButton.addEventListener('touchcancel', cancelPress);
+                        subCatButton.addEventListener('click', (e) => { if (longPressTriggered) { e.preventDefault(); e.stopPropagation(); } }, true);
+                    }
+                    quickAddContainer.appendChild(subCatButton);
+                });
+
+                const combinedSubCats = [...(SUBCATEGORIES[category] || []), ...(customItems[category] || [])];
+                const customSubCatExists = combinedSubCats.some(sc => !(SUBCATEGORIES[category] || []).some(dsc => dsc.name === sc.name));
+                if (customSubCatExists) {
+                    const hintText = document.createElement('p');
+                    hintText.className = 'text-xs text-center text-gray-500 pt-2';
+                    hintText.textContent = '提示：長按自訂的子分類可修改或刪除。';
+                    quickAddContainer.appendChild(hintText);
+                }
+
+                 if (category !== '飲食' || (category === '飲食' && selectedMealType)) {
+                    const addSubCategoryButton = document.createElement('button');
+                    addSubCategoryButton.className = 'w-full text-left p-3 mt-2 bg-gray-50 border border-dashed border-gray-400 rounded-lg text-gray-600 hover:bg-gray-100 hover:border-gray-500 hover:text-gray-800 font-semibold flex items-center justify-center transition';
+                    addSubCategoryButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>新增子分類...`;
+                    addSubCategoryButton.onclick = () => {
+                        showCustomInputModal((newText) => {
+                            const newSubCatName = newText.trim();
+                            if (newSubCatName) {
+                                if (!customItems[category]) { customItems[category] = []; }
+                                const existsInDefault = (SUBCATEGORIES[category] || []).some(sc => sc.name === newSubCatName);
+                                const existsInCustom = (customItems[category] || []).some(sc => sc.name === newSubCatName);
+                                if (!existsInDefault && !existsInCustom) {
+                                    customItems[category].push({ name: newSubCatName, items: [] });
+                                    saveCustomItems();
+                                    viewingSubCategoryItems = newSubCatName;
+                                    renderModalContent();
+                                }
+                            }
+                        }, '新增子分類');
+                    };
+                    quickAddContainer.appendChild(addSubCategoryButton);
+                }
+                modalBody.appendChild(quickAddContainer);
+            }
+            
             if (!selectionPreviewContainer) {
                 selectionPreviewContainer = document.createElement('div');
             }
             updateSelectionPreview();
+            
+            modalPanel.appendChild(selectionPreviewContainer);
+            modalPanel.appendChild(modalBody);
+            modalPanel.appendChild(footer);
+        };
 
-            const footer = document.createElement('div');
-            footer.className = 'p-4 border-t border-gray-200 bg-white flex-shrink-0';
-            const confirmButton = document.createElement('button');
-            confirmButton.className = 'w-full py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition disabled:bg-gray-300';
-            confirmButton.textContent = '新增記錄';
-            confirmButton.disabled = selectedItems.size === 0;
-            confirmButton.onclick = () => {
-                let content = Array.from(selectedItems).join(', ');
+        footer.className = 'p-4 border-t border-gray-200 bg-white flex-shrink-0';
+        confirmButton.className = 'w-full py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition disabled:bg-gray-300';
+        confirmButton.textContent = '新增記錄';
+        confirmButton.disabled = true;
+        confirmButton.onclick = () => {
+            let content = '';
+            let timestamp: number;
+
+            if (category === '健康' && viewingSubCategoryItems === '睡眠') {
+                const bedtimeInput = modalPanel.querySelector<HTMLInputElement>('#bedtime');
+                const waketimeInput = modalPanel.querySelector<HTMLInputElement>('#waketime');
+                if (bedtimeInput && waketimeInput) {
+                    const bedtimeValue = bedtimeInput.value;
+                    const waketimeValue = waketimeInput.value;
+                    const dateValue = selectedDate;
+                    
+                    const wakeUpDate = new Date(`${dateValue}T${waketimeValue}`);
+                    let bedTimeDate = new Date(`${dateValue}T${bedtimeValue}`);
+
+                    if (wakeUpDate < bedTimeDate) {
+                        bedTimeDate.setDate(bedTimeDate.getDate() - 1);
+                    }
+
+                    const durationMs = wakeUpDate.getTime() - bedTimeDate.getTime();
+                    const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+                    const durationMinutes = Math.round((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+                    
+                    content = `睡眠 ${durationHours}小時${durationMinutes}分鐘 (${bedtimeValue} - ${waketimeValue})`;
+                    timestamp = wakeUpDate.getTime();
+                } else {
+                    return; 
+                }
+            } else {
+                content = Array.from(selectedItems).join(', ');
                 if (category === '飲食' && selectedMealType) {
                     content = `${selectedMealType}: ${content}`;
                 }
                 const dateParts = selectedDate.split('-').map(Number);
                 const now = new Date();
-                const timestamp = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], now.getHours(), now.getMinutes(), now.getSeconds()).getTime();
+                timestamp = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], now.getHours(), now.getMinutes(), now.getSeconds()).getTime();
+            }
+
+            if (content) {
                 addEntry(category, content, timestamp);
-                closeModal();
-            };
-
-            footer.appendChild(confirmButton);
-
-            modalPanel.appendChild(selectionPreviewContainer);
-            modalPanel.appendChild(modalBody);
-            modalPanel.appendChild(footer);
+            }
+            closeModal();
         };
+
+        footer.appendChild(confirmButton);
         
         modalOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center animate-fade-in-fast';
         modalOverlay.onclick = (e) => {
@@ -1902,42 +2114,36 @@ export function AddEntryView(): HTMLElement {
             setDailyInfo(today, newDailyInfo);
             dailyInfoContainer.innerHTML = `📍 ${newDailyInfo.location} | ${newDailyInfo.weather.icon} ${Math.round(newDailyInfo.weather.temp)}°C ${newDailyInfo.weather.description}`;
 
-        } catch (error) {
-            console.error("無法取得每日資訊:", error);
+        } catch (error: unknown) {
+            let errorMessageForConsole = "Unknown error";
+            if (error instanceof Error) {
+                errorMessageForConsole = error.message;
+            } else if (error && typeof error === 'object' && 'message' in error) {
+                errorMessageForConsole = String((error as { message: unknown }).message);
+            } else if (typeof error === 'string') {
+                errorMessageForConsole = error;
+            }
+            console.error("無法取得每日資訊:", errorMessageForConsole, error);
             
             let finalMessage = '無法取得地點與天氣資訊，請稍後再試。';
 
-            // Handle various error types to get a user-friendly message
-            if (error && typeof error === 'object') {
-                const err = error as any;
-                
-                // 1. GeolocationPositionError (has .code and .message)
-                if (typeof err.code === 'number' && typeof err.message === 'string') {
-                    switch (err.code) {
-                        case 1: finalMessage = '請開啟定位權限以取得天氣資訊'; break;
-                        case 2: finalMessage = '暫時無法取得您的位置'; break;
-                        case 3: finalMessage = '取得位置資訊逾時'; break;
-                        default: finalMessage = `定位錯誤 (${err.code}): ${err.message}`; break;
-                    }
-                // 2. Standard Error objects (have .message)
-                } else if (typeof err.message === 'string' && err.message) {
-                    finalMessage = err.message;
-                // 3. API-specific error objects as a fallback
-                } else if (typeof err.reason === 'string' && err.reason) {
-                    finalMessage = err.reason;
-                } else if (typeof err.error === 'string' && err.error) {
-                    finalMessage = err.error;
+            // Check for GeolocationPositionError properties
+            if (error && typeof error === 'object' && 'code' in error && 'message' in error && typeof (error as any).code === 'number') {
+                const geoError = error as {code: number, message: string};
+                 switch (geoError.code) {
+                    case 1: finalMessage = '請開啟定位權限以取得天氣資訊'; break;
+                    case 2: finalMessage = '暫時無法取得您的位置'; break;
+                    case 3: finalMessage = '取得位置資訊逾時'; break;
+                    default: finalMessage = `定位錯誤 (${geoError.code}): ${geoError.message}`; break;
                 }
-            } else if (error) {
-                finalMessage = String(error);
+            } else if (error instanceof Error) {
+                 finalMessage = error.message;
             }
             
-            // Sanitize common network errors and final garbage responses
+            // Sanitize common network errors
             const lowerCaseMessage = finalMessage.toLowerCase();
             if (lowerCaseMessage.includes('failed to fetch') || lowerCaseMessage.includes('networkerror')) {
                 finalMessage = '網路連線失敗，請檢查您的網路連線。';
-            } else if (finalMessage.includes('[object object]')) {
-                finalMessage = '收到來自伺服器的無效回應。';
             }
             
             dailyInfoContainer.innerHTML = `
@@ -1984,387 +2190,643 @@ export function AddEntryView(): HTMLElement {
 export function StatisticsView() {
     const container = document.createElement('div');
     container.className = 'p-4 space-y-4';
+    
     let selectedCategories: Category[] = ['行為'];
     let currentPeriod = 7;
     let currentChartType: 'stacked' | 'pie' | 'bar' | 'combo' = 'combo';
-
     let aiAnalysisVisible = false;
     let aiAnalysisContent: string | null = null;
     let aiAnalysisLoading = false;
     let aiAnalysisError: string | null = null;
 
-    const controls = document.createElement('div');
-    controls.className = 'bg-white p-3 rounded-lg shadow-sm space-y-3';
+    const mainContentContainer = document.createElement('div');
 
-    // Category Selector
-    const categorySelectorContainer = document.createElement('div');
-    const categoryLabel = document.createElement('label');
-    categoryLabel.className = 'text-sm font-medium text-gray-700';
-    categorySelectorContainer.appendChild(categoryLabel);
+    function showEditHistoryModal(entry: BasicInfoEntry) {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70] p-4 animate-fade-in-fast';
     
-    const categorySelector = document.createElement('div');
-    categorySelector.className = 'grid grid-cols-3 gap-2 mt-1';
-    Object.keys(CATEGORY_CONFIG).forEach(catStr => {
-        const cat = catStr as Category;
-        const button = document.createElement('button');
-        button.dataset.cat = cat;
-        button.textContent = cat;
-        button.className = `px-2 py-1.5 text-sm rounded-md transition`;
-        button.onclick = () => {
-            if (currentChartType === 'stacked') {
-                const index = selectedCategories.indexOf(cat);
-                if (index > -1) {
-                    if (selectedCategories.length > 1) {
-                        selectedCategories.splice(index, 1);
-                    }
-                } else {
-                    selectedCategories.push(cat);
-                }
-            } else {
-                selectedCategories = [cat];
-                if (cat === '行為') {
-                    currentChartType = 'combo';
-                } else if (cat === '情緒') {
-                    currentChartType = 'pie';
-                } else {
-                    currentChartType = 'stacked';
-                }
-            }
-            updateControlsUI();
-            updateCharts();
-        };
-        categorySelector.appendChild(button);
-    });
-    categorySelectorContainer.appendChild(categorySelector);
-
-    // Period Selector
-    const periodSelectorContainer = document.createElement('div');
-    const periodLabel = document.createElement('label');
-    periodLabel.textContent = '時間範圍：';
-    periodLabel.className = 'text-sm font-medium text-gray-700';
-    periodSelectorContainer.appendChild(periodLabel);
-    const periodSelector = document.createElement('div');
-    periodSelector.className = 'flex items-center bg-gray-100 rounded-lg p-1 mt-1';
-    [7, 30, 90].forEach(p => {
-        const button = document.createElement('button');
-        button.dataset.period = String(p);
-        button.textContent = `最近 ${p} 天`;
-        button.className = `flex-1 px-3 py-1.5 text-sm rounded-md transition font-semibold ${p === currentPeriod ? 'bg-white text-blue-600 shadow' : 'bg-transparent text-gray-600'}`;
-        button.onclick = () => {
-            currentPeriod = p;
-            updateControlsUI();
-            updateCharts();
-        };
-        periodSelector.appendChild(button);
-    });
-    periodSelectorContainer.appendChild(periodSelector);
-
-    // Chart Type Selector
-    const chartTypeSelectorContainer = document.createElement('div');
-    const chartTypeLabel = document.createElement('label');
-    chartTypeLabel.textContent = '圖表類型：';
-    chartTypeLabel.className = 'text-sm font-medium text-gray-700';
-    chartTypeSelectorContainer.appendChild(chartTypeLabel);
-    const chartTypeSelector = document.createElement('div');
-    chartTypeSelector.className = 'flex items-center bg-gray-100 rounded-lg p-1 mt-1';
+        const panel = document.createElement('div');
+        panel.className = 'bg-white rounded-xl shadow-xl w-full max-w-sm animate-slide-up flex flex-col';
     
-    const chartTypes: { id: 'stacked' | 'pie' | 'bar' | 'combo'; label: string }[] = [
-        { id: 'stacked', label: '趨勢圖' },
-        { id: 'pie', label: '分佈圖' },
-        { id: 'combo', label: '氣溫' },
-        { id: 'bar', label: '總計圖' },
-    ];
+        const header = document.createElement('div');
+        header.className = 'p-4 border-b flex items-center justify-between';
+        const entryDate = new Date(entry.timestamp).toLocaleDateString('zh-TW', { month: 'long', day: 'numeric' });
+        header.innerHTML = `<h3 class="font-semibold text-center text-lg text-gray-800">編輯 ${entryDate} 的記錄</h3>`;
+        const closeButton = document.createElement('button');
+        closeButton.className = 'p-1 text-gray-500 hover:text-gray-800 rounded-full';
+        closeButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
+        closeButton.onclick = () => overlay.remove();
+        header.appendChild(closeButton);
     
-    chartTypes.forEach(type => {
-        const button = document.createElement('button');
-        button.dataset.type = type.id;
-        button.textContent = type.label;
-        button.className = `chart-type-btn flex-1 px-3 py-1.5 text-sm rounded-md transition font-semibold`;
-        button.onclick = () => {
-            currentChartType = type.id;
-            updateControlsUI();
-            updateCharts();
-        };
-        chartTypeSelector.appendChild(button);
-    });
-    chartTypeSelectorContainer.appendChild(chartTypeSelector);
-
-
-    // AI Analysis Button
-    const aiButtonContainer = document.createElement('div');
-    aiButtonContainer.className = 'pt-3 border-t border-gray-200/80';
-    const aiButton = document.createElement('button');
-    aiButton.id = 'ai-analysis-btn';
-    aiButton.className = 'w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition disabled:opacity-50';
-    aiButton.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
-        <span>開啟 AI 智能分析</span>
-    `;
-    if (!ai) {
-        aiButton.disabled = true;
-        aiButton.innerHTML += ` (未配置)`;
-    }
-    aiButtonContainer.appendChild(aiButton);
-
-    controls.appendChild(categorySelectorContainer);
-    controls.appendChild(periodSelectorContainer);
-    controls.appendChild(chartTypeSelectorContainer);
-    controls.appendChild(aiButtonContainer);
-    container.appendChild(controls);
-
-    const chartContainer = document.createElement('div');
-    chartContainer.id = 'chart-container';
-    chartContainer.className = 'bg-white p-2 rounded-lg shadow-sm min-h-[350px]';
-    container.appendChild(chartContainer);
-    
-    const aiContainer = document.createElement('div');
-    aiContainer.id = 'ai-container';
-    aiContainer.className = 'relative bg-white p-4 rounded-lg shadow-sm mt-4 text-gray-800 text-sm leading-relaxed border-l-4 border-blue-400 animate-fade-in';
-    aiContainer.style.display = 'none';
-    container.appendChild(aiContainer);
-
-    function renderAIAnalysis() {
-        const openIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>`;
-        
-        if (!aiAnalysisVisible) {
-            aiContainer.style.display = 'none';
-            aiButton.innerHTML = `${openIcon}<span>開啟 AI 智能分析</span>`;
-            return;
-        }
-
-        aiContainer.style.display = 'block';
-        aiButton.innerHTML = `${openIcon}<span>關閉 AI 智能分析</span>`;
-        aiContainer.innerHTML = '';
-
-        if (aiAnalysisLoading) {
-            aiContainer.innerHTML = `
-                <div class="flex items-center justify-center flex-col p-8">
-                    <svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <p class="mt-4 text-base font-semibold text-gray-600">AI 正在為您分析日誌，請稍候...</p>
+        const body = document.createElement('div');
+        body.className = 'p-4 space-y-4';
+        body.innerHTML = `
+            <div>
+                <label for="edit-age" class="block text-sm font-medium text-gray-700">年齡</label>
+                <div class="mt-1 relative rounded-md shadow-sm">
+                    <input type="number" step="1" min="0" id="edit-age" value="${entry.age ?? ''}" class="block w-full rounded-md border-gray-300 pl-3 pr-12 focus:border-indigo-500 focus:ring-indigo-500 text-lg p-2">
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3"><span class="text-gray-500">歲</span></div>
                 </div>
-            `;
-        } else if (aiAnalysisError) {
-            aiContainer.innerHTML = `<div class="text-red-600 p-4 bg-red-50 rounded-lg"><p><strong>分析失敗：</strong> ${aiAnalysisError}</p></div>`;
-        } else if (aiAnalysisContent) {
-            const formattedContent = aiAnalysisContent
-                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 font-semibold">$1</strong>')
-                .replace(/(\n|^)(\d\.\s.*)/g, '$1<p class="mt-2 mb-1">$2</p>')
-                .replace(/\n/g, '<br>');
-            aiContainer.innerHTML = `<div>${formattedContent}</div>`;
-        }
+            </div>
+            <div>
+                <label for="edit-height" class="block text-sm font-medium text-gray-700">身高</label>
+                <div class="mt-1 relative rounded-md shadow-sm">
+                    <input type="number" step="0.1" min="0" id="edit-height" value="${entry.height ?? ''}" class="block w-full rounded-md border-gray-300 pl-3 pr-16 focus:border-indigo-500 focus:ring-indigo-500 text-lg p-2">
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3"><span class="text-gray-500">公分</span></div>
+                </div>
+            </div>
+            <div>
+                <label for="edit-weight" class="block text-sm font-medium text-gray-700">體重</label>
+                <div class="mt-1 relative rounded-md shadow-sm">
+                    <input type="number" step="0.1" min="0" id="edit-weight" value="${entry.weight ?? ''}" class="block w-full rounded-md border-gray-300 pl-3 pr-16 focus:border-indigo-500 focus:ring-indigo-500 text-lg p-2">
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3"><span class="text-gray-500">公斤</span></div>
+                </div>
+            </div>
+        `;
+    
+        const footer = document.createElement('div');
+        footer.className = 'p-3 bg-gray-50 flex justify-end';
+    
+        const saveButton = document.createElement('button');
+        saveButton.className = 'px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition';
+        saveButton.textContent = '儲存變更';
+        saveButton.onclick = () => {
+            const ageInput = panel.querySelector<HTMLInputElement>('#edit-age');
+            const heightInput = panel.querySelector<HTMLInputElement>('#edit-height');
+            const weightInput = panel.querySelector<HTMLInputElement>('#edit-weight');
+            
+            const getVal = (input: HTMLInputElement | null): number | undefined => {
+                if (!input || input.value.trim() === '') return undefined;
+                const num = parseFloat(input.value);
+                return isNaN(num) ? undefined : num;
+            };
+    
+            const updates: Partial<BasicInfo> = {
+                age: getVal(ageInput),
+                height: getVal(heightInput),
+                weight: getVal(weightInput),
+            };
+            updateBasicInfoHistoryEntry(entry.timestamp, updates);
+            overlay.remove();
+        };
+    
+        footer.appendChild(saveButton);
+        panel.appendChild(header);
+        panel.appendChild(body);
+        panel.appendChild(footer);
+        overlay.onclick = (e) => {
+            if (e.target === overlay) overlay.remove();
+        };
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
     }
     
-    aiButton.onclick = async () => {
-        if (aiAnalysisVisible) {
-            aiAnalysisVisible = false;
-            renderAIAnalysis();
-            return;
-        }
+    function showDeleteHistoryConfirmation(entry: BasicInfoEntry) {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70] p-4 animate-fade-in-fast';
 
-        aiAnalysisVisible = true;
-        aiAnalysisLoading = true;
-        aiAnalysisError = null;
-        aiAnalysisContent = null;
-        renderAIAnalysis();
+        const panel = document.createElement('div');
+        panel.className = 'bg-white rounded-xl shadow-xl w-full max-w-xs animate-slide-up flex flex-col';
 
-        try {
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setDate(endDate.getDate() - currentPeriod);
-            startDate.setHours(0, 0, 0, 0);
+        const header = document.createElement('div');
+        header.className = 'p-3 border-b';
+        header.innerHTML = `<h3 class="font-semibold text-center text-red-600">確認刪除</h3>`;
 
-            const entriesForAI = state.entries.filter(entry => {
-                const entryDate = new Date(entry.timestamp);
-                return entryDate >= startDate && entryDate <= endDate;
-            });
-            
-            if (entriesForAI.length < 5) {
-                 throw new Error('此期間沒有足夠的資料可供 AI 分析 (至少需要 5 筆記錄)。');
-            }
+        const body = document.createElement('div');
+        body.className = 'p-4 text-center';
+        const entryDate = new Date(entry.timestamp).toLocaleDateString('zh-TW');
+        body.innerHTML = `您確定要刪除 ${entryDate} 的<br>這筆歷史記錄嗎？`;
 
-            const result = await analyzeLogsWithGemini(entriesForAI, currentPeriod, selectedCategories[0]);
-            aiAnalysisContent = result;
-        } catch (e: any) {
-            aiAnalysisError = e.message || '發生未知錯誤';
-        } finally {
-            aiAnalysisLoading = false;
-            renderAIAnalysis();
+        const footer = document.createElement('div');
+        footer.className = 'p-2 bg-gray-50 grid grid-cols-2 gap-2';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.className = 'px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition';
+        cancelButton.textContent = '取消';
+        cancelButton.onclick = () => overlay.remove();
+
+        const confirmButton = document.createElement('button');
+        confirmButton.className = 'px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition';
+        confirmButton.textContent = '刪除';
+        confirmButton.onclick = () => {
+            deleteBasicInfoHistoryEntry(entry.timestamp);
+            overlay.remove();
+        };
+
+        footer.appendChild(cancelButton);
+        footer.appendChild(confirmButton);
+        panel.appendChild(header);
+        panel.appendChild(body);
+        panel.appendChild(footer);
+        overlay.onclick = (e) => {
+            if (e.target === overlay) overlay.remove();
+        };
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+    }
+
+    function showHistoryActionMenu(entry: BasicInfoEntry) {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 bg-black bg-opacity-40 z-[60] animate-fade-in-fast';
+    
+        const panel = document.createElement('div');
+        panel.className = 'fixed bottom-0 left-0 right-0 p-2 bg-transparent rounded-t-2xl animate-slide-up max-w-md mx-auto';
+        
+        const actionsGroup = document.createElement('div');
+        actionsGroup.className = 'bg-white/80 backdrop-blur-xl rounded-xl overflow-hidden';
+    
+        const editButton = document.createElement('button');
+        editButton.className = 'w-full p-3 text-center text-blue-500 font-semibold text-lg hover:bg-gray-100 transition';
+        editButton.textContent = '編輯記錄';
+        editButton.onclick = () => {
+            overlay.remove();
+            showEditHistoryModal(entry);
+        };
+    
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'w-full p-3 text-center text-red-500 font-semibold text-lg hover:bg-gray-100 transition';
+        deleteButton.textContent = '刪除記錄';
+        deleteButton.onclick = () => {
+            overlay.remove();
+            showDeleteHistoryConfirmation(entry);
+        };
+        
+        const separator = document.createElement('div');
+        separator.className = 'h-px bg-gray-300/60';
+    
+        actionsGroup.appendChild(editButton);
+        actionsGroup.appendChild(separator);
+        actionsGroup.appendChild(deleteButton);
+    
+        const cancelButton = document.createElement('button');
+        cancelButton.className = 'w-full p-3 mt-2 text-center text-blue-500 font-bold text-lg bg-white/80 backdrop-blur-xl rounded-xl hover:bg-gray-100 transition';
+        cancelButton.textContent = '取消';
+        cancelButton.onclick = () => overlay.remove();
+    
+        panel.appendChild(actionsGroup);
+        panel.appendChild(cancelButton);
+        overlay.appendChild(panel);
+        overlay.onclick = (e) => {
+            if (e.target === overlay) overlay.remove();
+        };
+        document.body.appendChild(overlay);
+    }
+
+    const render = () => {
+        container.innerHTML = '';
+        mainContentContainer.innerHTML = '';
+
+        // Sub-navigation
+        const statsNav = document.createElement('div');
+        statsNav.className = 'flex items-center bg-gray-200 rounded-lg p-1 mb-4';
+        const views: { id: 'charts' | 'basicInfo'; label: string }[] = [
+            { id: 'charts', label: '圖表分析' },
+            { id: 'basicInfo', label: '基本資料' }
+        ];
+        views.forEach(view => {
+            const button = document.createElement('button');
+            button.textContent = view.label;
+            button.className = `flex-1 px-3 py-1.5 text-sm rounded-md transition font-semibold ${view.id === state.currentStatsView ? 'bg-white text-blue-600 shadow' : 'bg-transparent text-gray-600'}`;
+            button.onclick = () => {
+                setState({ currentStatsView: view.id });
+            };
+            statsNav.appendChild(button);
+        });
+        container.appendChild(statsNav);
+        container.appendChild(mainContentContainer);
+
+        if (state.currentStatsView === 'charts') {
+            renderChartAnalysisView();
+        } else {
+            renderBasicInfoView();
         }
     };
-
-    function updateControlsUI() {
-        const isMultiSelect = currentChartType === 'stacked';
-        categoryLabel.textContent = isMultiSelect ? '分析類別 (可複選)：' : '分析類別：';
-
-        categorySelector.querySelectorAll('button').forEach(btn => {
-            const cat = btn.dataset.cat as Category;
-            const isSelected = selectedCategories.includes(cat);
-            btn.className = `px-2 py-1.5 text-sm rounded-md transition ${isSelected ? 'bg-blue-500 text-white font-semibold' : 'bg-gray-200 text-gray-700'}`;
-        });
-        periodSelector.querySelectorAll('button').forEach(btn => {
-            const periodValue = parseInt(btn.dataset.period || '0', 10);
-            btn.className = `flex-1 px-3 py-1.5 text-sm rounded-md transition font-semibold ${periodValue === currentPeriod ? 'bg-white text-blue-600 shadow' : 'bg-transparent text-gray-600'}`;
-        });
+    
+    function renderBasicInfoView() {
+        mainContentContainer.innerHTML = '';
+        const section = document.createElement('div');
+        section.className = 'bg-white p-4 rounded-lg shadow-sm animate-fade-in space-y-4';
         
-        chartTypeSelector.innerHTML = '';
-        chartTypes.forEach(type => {
-            if (!isMultiSelect && selectedCategories[0] === '情緒' && type.id === 'combo') {
-                return;
+        const { age, height, weight } = state.basicInfo;
+
+        if (!age && !height && !weight) {
+            section.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <p class="mt-4 font-semibold text-gray-700">尚未設定基本資料</p>
+                    <p class="text-sm text-gray-500 mt-1 mb-4">設定身高、體重與年齡有助於更全面的觀察。</p>
+                    <button id="add-basic-info-btn" class="px-5 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition shadow-sm">
+                        前往設定
+                    </button>
+                </div>
+            `;
+            section.querySelector<HTMLButtonElement>('#add-basic-info-btn')!.onclick = () => showBasicInfoModal({ isAdding: true });
+        } else {
+            const header = document.createElement('div');
+            header.className = 'flex justify-between items-center';
+            header.innerHTML = `<h3 class="text-lg font-bold text-gray-800">基本資料</h3>`;
+            const addButton = document.createElement('button');
+            addButton.className = 'px-4 py-1.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200 transition';
+            addButton.textContent = '新增';
+            addButton.onclick = () => showBasicInfoModal({ isAdding: true });
+            header.appendChild(addButton);
+            
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-3 gap-3 text-center';
+            
+            const createInfoBox = (label: string, value: string, unit: string) => `
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <p class="text-sm font-medium text-gray-500">${label}</p>
+                    <p class="text-2xl font-bold text-gray-800">${value}</p>
+                    <p class="text-xs text-gray-500">${unit}</p>
+                </div>
+            `;
+            
+            grid.innerHTML = `
+                ${createInfoBox('年齡', age != null ? String(age) : '--', '歲')}
+                ${createInfoBox('身高', height != null ? String(height) : '--', '公分')}
+                ${createInfoBox('體重', weight != null ? String(weight) : '--', '公斤')}
+            `;
+            
+            let bmiSection: HTMLElement | null = null;
+            if (height && weight) {
+                const heightInMeters = height / 100;
+                const bmi = weight / (heightInMeters * heightInMeters);
+                const { category, color } = getBMICategory(bmi);
+                bmiSection = document.createElement('div');
+                bmiSection.className = 'text-center p-4 rounded-lg';
+                bmiSection.style.backgroundColor = `${color}1A`;
+                bmiSection.innerHTML = `
+                    <p class="text-sm font-medium" style="color: ${color};">身體質量指數 (BMI)</p>
+                    <p class="text-3xl font-bold" style="color: ${color};">${bmi.toFixed(1)}</p>
+                    <p class="text-sm font-semibold" style="color: ${color};">${category}</p>
+                `;
             }
+            
+            section.appendChild(header);
+            section.appendChild(grid);
+            if (bmiSection) section.appendChild(bmiSection);
+
+            if (state.basicInfoHistory && state.basicInfoHistory.length > 0) {
+                const historySection = document.createElement('div');
+                historySection.className = 'mt-4 pt-4 border-t border-gray-200';
+                historySection.innerHTML = `<h4 class="text-md font-semibold text-gray-700 mb-2">歷史記錄</h4>`;
+                
+                const historyList = document.createElement('ul');
+                historyList.className = 'space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2';
+
+                [...state.basicInfoHistory].reverse().forEach(entry => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center p-2.5 bg-gray-50/70 rounded-lg text-sm noselect';
+
+                    const date = new Date(entry.timestamp).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    
+                    const dateSpan = document.createElement('span');
+                    dateSpan.className = 'font-semibold text-gray-800 tracking-tight';
+                    dateSpan.textContent = date;
+
+                    const statsDiv = document.createElement('div');
+                    statsDiv.className = 'flex items-baseline space-x-4 text-gray-600';
+                    
+                    let statsContent = '';
+                    if (entry.age) statsContent += `<span>${entry.age} <span class="text-xs">歲</span></span>`;
+                    if (entry.height) statsContent += `<span>${entry.height} <span class="text-xs">cm</span></span>`;
+                    if (entry.weight) statsContent += `<span>${entry.weight} <span class="text-xs">kg</span></span>`;
+
+                    statsDiv.innerHTML = statsContent;
+
+                    li.appendChild(dateSpan);
+                    li.appendChild(statsDiv);
+                    
+                    let pressTimer: number | null = null;
+                    let longPressTriggered = false;
+              
+                    const startPress = (e: Event) => {
+                        longPressTriggered = false;
+                        pressTimer = window.setTimeout(() => {
+                            longPressTriggered = true;
+                            if ('vibrate' in navigator) navigator.vibrate(50);
+                            showHistoryActionMenu(entry);
+                        }, 700);
+                    };
+              
+                    const cancelPress = () => {
+                        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+                    };
+                    
+                    li.addEventListener('mousedown', startPress);
+                    li.addEventListener('touchstart', startPress, { passive: true });
+                    li.addEventListener('mouseup', cancelPress);
+                    li.addEventListener('mouseleave', cancelPress);
+                    li.addEventListener('touchend', cancelPress);
+                    li.addEventListener('touchcancel', cancelPress);
+                    li.addEventListener('touchmove', cancelPress, { passive: true });
+                    
+                    li.addEventListener('click', (e) => {
+                      if (longPressTriggered) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }
+                    }, true);
+
+                    historyList.appendChild(li);
+                });
+                
+                historySection.appendChild(historyList);
+                const hint = document.createElement('p');
+                hint.className = 'text-center text-xs text-gray-400 mt-3';
+                hint.textContent = '提示：長按歷史記錄可進行編輯或刪除。';
+                historySection.appendChild(hint);
+                section.appendChild(historySection);
+            }
+        }
+        mainContentContainer.appendChild(section);
+
+        if (state.basicInfoHistory && state.basicInfoHistory.length > 0) {
+            const trendSection = document.createElement('div');
+            trendSection.className = 'bg-white p-4 rounded-lg shadow-sm animate-fade-in space-y-2 mt-4';
+            trendSection.innerHTML = `<h3 class="text-lg font-bold text-gray-800">成長趨勢</h3>`;
+            const chartContainer = document.createElement('div');
+            chartContainer.id = 'growth-chart-container';
+            chartContainer.className = 'min-h-[350px]';
+            trendSection.appendChild(chartContainer);
+            
+            mainContentContainer.appendChild(trendSection);
+
+            setTimeout(() => {
+                renderGrowthChart(chartContainer, state.basicInfoHistory);
+            }, 0);
+        }
+    }
+    
+    function renderChartAnalysisView() {
+        mainContentContainer.innerHTML = '';
+        const controls = document.createElement('div');
+        controls.className = 'bg-white p-3 rounded-lg shadow-sm space-y-3 animate-fade-in';
+
+        const categorySelectorContainer = document.createElement('div');
+        const categoryLabel = document.createElement('label');
+        categoryLabel.className = 'text-sm font-medium text-gray-700';
+        categorySelectorContainer.appendChild(categoryLabel);
+        
+        const categorySelector = document.createElement('div');
+        categorySelector.className = 'grid grid-cols-3 gap-2 mt-1';
+        Object.keys(CATEGORY_CONFIG).forEach(catStr => {
+            const cat = catStr as Category;
             const button = document.createElement('button');
-            button.dataset.type = type.id;
-            button.textContent = type.label;
-            button.className = `chart-type-btn flex-1 px-3 py-1.5 text-sm rounded-md transition font-semibold ${type.id === currentChartType ? 'bg-white text-blue-600 shadow' : 'bg-transparent text-gray-600'}`;
+            button.dataset.cat = cat;
+            button.textContent = cat;
+            button.className = `px-2 py-1.5 text-sm rounded-md transition`;
             button.onclick = () => {
-                const oldType = currentChartType;
-                currentChartType = type.id;
-                if (oldType === 'stacked' && currentChartType !== 'stacked') {
-                    if (selectedCategories.length > 1) {
-                        selectedCategories = [selectedCategories[0]];
+                if (currentChartType === 'stacked') {
+                    const index = selectedCategories.indexOf(cat);
+                    if (index > -1) {
+                        if (selectedCategories.length > 1) {
+                            selectedCategories.splice(index, 1);
+                        }
+                    } else {
+                        selectedCategories.push(cat);
                     }
+                } else {
+                    selectedCategories = [cat];
+                    if (cat === '行為') currentChartType = 'combo';
+                    else if (cat === '情緒') currentChartType = 'pie';
+                    else currentChartType = 'stacked';
                 }
                 updateControlsUI();
                 updateCharts();
             };
-            chartTypeSelector.appendChild(button);
+            categorySelector.appendChild(button);
         });
-    }
+        categorySelectorContainer.appendChild(categorySelector);
 
-    function updateCharts() {
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(endDate.getDate() - currentPeriod + 1);
-        startDate.setHours(0, 0, 0, 0);
+        const periodSelectorContainer = document.createElement('div');
+        const periodLabel = document.createElement('label');
+        periodLabel.textContent = '時間範圍：';
+        periodLabel.className = 'text-sm font-medium text-gray-700';
+        periodSelectorContainer.appendChild(periodLabel);
+        const periodSelector = document.createElement('div');
+        periodSelector.className = 'flex items-center bg-gray-100 rounded-lg p-1 mt-1';
+        [7, 30, 90].forEach(p => {
+            const button = document.createElement('button');
+            button.dataset.period = String(p);
+            button.textContent = `最近 ${p} 天`;
+            button.className = `flex-1 px-3 py-1.5 text-sm rounded-md transition font-semibold`;
+            button.onclick = () => {
+                currentPeriod = p;
+                updateControlsUI();
+                updateCharts();
+            };
+            periodSelector.appendChild(button);
+        });
+        periodSelectorContainer.appendChild(periodSelector);
 
-        if (currentChartType === 'stacked') {
-            if (selectedCategories.length > 1) {
-                const filteredEntries = state.entries.filter(entry => {
-                    const entryDate = new Date(entry.timestamp);
-                    return selectedCategories.includes(entry.category) && entryDate >= startDate && entryDate <= endDate;
-                });
-                const dataByDate: Record<string, Record<string, number>> = {};
-                filteredEntries.forEach(entry => {
-                    const date = new Date(entry.timestamp).toISOString().split('T')[0];
-                    if (!dataByDate[date]) dataByDate[date] = {};
-                    const items = entry.content.replace(/^[^:]+:\s*/, '').split(', ');
-                    const itemCount = items.filter(item => item.trim()).length;
-                    dataByDate[date][entry.category] = (dataByDate[date][entry.category] || 0) + itemCount;
-                });
-                const chartData: any[] = [];
-                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    const dayData = dataByDate[dateStr] || {};
-                    const entryForChart: Record<string, any> = { date: dateStr };
-                    let total = 0;
-                    selectedCategories.forEach(cat => {
-                        const count = dayData[cat] || 0;
-                        entryForChart[cat] = count;
-                        total += count;
+        const chartTypeSelectorContainer = document.createElement('div');
+        const chartTypeLabel = document.createElement('label');
+        chartTypeLabel.textContent = '圖表類型：';
+        chartTypeLabel.className = 'text-sm font-medium text-gray-700';
+        chartTypeSelectorContainer.appendChild(chartTypeLabel);
+        const chartTypeSelector = document.createElement('div');
+        chartTypeSelector.className = 'flex items-center bg-gray-100 rounded-lg p-1 mt-1';
+        chartTypeSelectorContainer.appendChild(chartTypeSelector);
+
+        const aiButtonContainer = document.createElement('div');
+        aiButtonContainer.className = 'pt-3 border-t border-gray-200/80';
+        const aiButton = document.createElement('button');
+        aiButton.id = 'ai-analysis-btn';
+        aiButton.className = 'w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition disabled:opacity-50';
+        if (!ai) {
+            aiButton.disabled = true;
+            aiButton.innerHTML += ` (未配置)`;
+        }
+        aiButtonContainer.appendChild(aiButton);
+
+        controls.appendChild(categorySelectorContainer);
+        controls.appendChild(periodSelectorContainer);
+        controls.appendChild(chartTypeSelectorContainer);
+        controls.appendChild(aiButtonContainer);
+
+        const chartContainer = document.createElement('div');
+        chartContainer.id = 'chart-container';
+        chartContainer.className = 'bg-white p-2 rounded-lg shadow-sm min-h-[350px] mt-4';
+        
+        const aiContainer = document.createElement('div');
+        aiContainer.id = 'ai-container';
+        aiContainer.className = 'relative bg-white p-4 rounded-lg shadow-sm mt-4 text-gray-800 text-sm leading-relaxed border-l-4 border-blue-400 animate-fade-in';
+        aiContainer.style.display = 'none';
+
+        mainContentContainer.appendChild(controls);
+        mainContentContainer.appendChild(chartContainer);
+        mainContentContainer.appendChild(aiContainer);
+
+        const renderAIAnalysis = () => {
+            const openIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>`;
+            if (!aiAnalysisVisible) {
+                aiContainer.style.display = 'none';
+                aiButton.innerHTML = `${openIcon}<span>開啟 AI 智能分析</span>`;
+                return;
+            }
+            aiContainer.style.display = 'block';
+            aiButton.innerHTML = `${openIcon}<span>關閉 AI 智能分析</span>`;
+            aiContainer.innerHTML = '';
+            if (aiAnalysisLoading) {
+                aiContainer.innerHTML = `<div class="flex items-center justify-center flex-col p-8"><svg class="animate-spin h-8 w-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p class="mt-4 text-base font-semibold text-gray-600">AI 正在為您分析日誌，請稍候...</p></div>`;
+            } else if (aiAnalysisError) {
+                aiContainer.innerHTML = `<div class="text-red-600 p-4 bg-red-50 rounded-lg"><p><strong>分析失敗：</strong> ${aiAnalysisError}</p></div>`;
+            } else if (aiAnalysisContent) {
+                const formattedContent = aiAnalysisContent.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 font-semibold">$1</strong>').replace(/(\n|^)(\d\.\s.*)/g, '$1<p class="mt-2 mb-1">$2</p>').replace(/\n/g, '<br>');
+                aiContainer.innerHTML = `<div>${formattedContent}</div>`;
+            }
+        };
+        
+        aiButton.onclick = async () => {
+            if (aiAnalysisVisible) {
+                aiAnalysisVisible = false;
+                renderAIAnalysis();
+                return;
+            }
+            aiAnalysisVisible = true; aiAnalysisLoading = true; aiAnalysisError = null; aiAnalysisContent = null;
+            renderAIAnalysis();
+            try {
+                const endDate = new Date();
+                const startDate = new Date();
+                startDate.setDate(endDate.getDate() - currentPeriod);
+                startDate.setHours(0, 0, 0, 0);
+                const entriesForAI = state.entries.filter(entry => new Date(entry.timestamp) >= startDate && new Date(entry.timestamp) <= endDate);
+                if (entriesForAI.length < 5) throw new Error('此期間沒有足夠的資料可供 AI 分析 (至少需要 5 筆記錄)。');
+                const result = await analyzeLogsWithGemini(entriesForAI, currentPeriod, selectedCategories[0]);
+                aiAnalysisContent = result;
+            } catch (e: any) {
+                aiAnalysisError = e.message || '發生未知錯誤';
+            } finally {
+                aiAnalysisLoading = false;
+                renderAIAnalysis();
+            }
+        };
+
+        const updateControlsUI = () => {
+            const isMultiSelect = currentChartType === 'stacked';
+            categoryLabel.textContent = isMultiSelect ? '分析類別 (可複選)：' : '分析類別：';
+            categorySelector.querySelectorAll('button').forEach(btn => {
+                const cat = btn.dataset.cat as Category;
+                const isSelected = selectedCategories.includes(cat);
+                btn.className = `px-2 py-1.5 text-sm rounded-md transition ${isSelected ? 'bg-blue-500 text-white font-semibold' : 'bg-gray-200 text-gray-700'}`;
+            });
+            periodSelector.querySelectorAll('button').forEach(btn => {
+                const periodValue = parseInt(btn.dataset.period || '0', 10);
+                btn.className = `flex-1 px-3 py-1.5 text-sm rounded-md transition font-semibold ${periodValue === currentPeriod ? 'bg-white text-blue-600 shadow' : 'bg-transparent text-gray-600'}`;
+            });
+            chartTypeSelector.innerHTML = '';
+            const chartTypes: { id: 'stacked' | 'pie' | 'bar' | 'combo'; label: string }[] = [{ id: 'stacked', label: '趨勢圖' }, { id: 'pie', label: '分佈圖' }, { id: 'combo', label: '氣溫' }, { id: 'bar', label: '總計圖' }];
+            chartTypes.forEach(type => {
+                if (!isMultiSelect && selectedCategories[0] === '情緒' && type.id === 'combo') return;
+                const button = document.createElement('button');
+                button.dataset.type = type.id;
+                button.textContent = type.label;
+                button.className = `chart-type-btn flex-1 px-3 py-1.5 text-sm rounded-md transition font-semibold ${type.id === currentChartType ? 'bg-white text-blue-600 shadow' : 'bg-transparent text-gray-600'}`;
+                button.onclick = () => {
+                    const oldType = currentChartType;
+                    currentChartType = type.id;
+                    if (oldType === 'stacked' && currentChartType !== 'stacked' && selectedCategories.length > 1) {
+                        selectedCategories = [selectedCategories[0]];
+                    }
+                    updateControlsUI();
+                    updateCharts();
+                };
+                chartTypeSelector.appendChild(button);
+            });
+        };
+
+        const updateCharts = () => {
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(endDate.getDate() - currentPeriod + 1);
+            startDate.setHours(0, 0, 0, 0);
+            if (currentChartType === 'stacked') {
+                if (selectedCategories.length > 1) {
+                    const filteredEntries = state.entries.filter(entry => new Date(entry.timestamp) >= startDate && new Date(entry.timestamp) <= endDate && selectedCategories.includes(entry.category));
+                    const dataByDate: Record<string, any> = {};
+                    filteredEntries.forEach(entry => {
+                        const date = new Date(entry.timestamp).toISOString().split('T')[0];
+                        if (!dataByDate[date]) dataByDate[date] = {};
+                        const itemCount = entry.content.replace(/^[^:]+:\s*/, '').split(', ').filter(item => item.trim()).length;
+                        dataByDate[date][entry.category] = (dataByDate[date][entry.category] || 0) + itemCount;
                     });
-                    entryForChart.total = total;
-                    chartData.push(entryForChart);
+                    const chartData: any[] = [];
+                    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                        const dateStr = d.toISOString().split('T')[0];
+                        const dayData = dataByDate[dateStr] || {};
+                        const entryForChart: Record<string, any> = { date: dateStr };
+                        let total = 0;
+                        selectedCategories.forEach(cat => { const count = dayData[cat] || 0; entryForChart[cat] = count; total += count; });
+                        entryForChart.total = total;
+                        chartData.push(entryForChart);
+                    }
+                    renderStackedBarChart(chartContainer, chartData, selectedCategories, selectedCategories[0]);
+                } else {
+                    const currentCategory = selectedCategories[0];
+                    const filteredEntries = state.entries.filter(entry => new Date(entry.timestamp) >= startDate && new Date(entry.timestamp) <= endDate && entry.category === currentCategory);
+                    const dataByDate: Record<string, any> = {};
+                    const allKeys = new Set<string>();
+                    filteredEntries.forEach(entry => {
+                        const date = new Date(entry.timestamp).toISOString().split('T')[0];
+                        if (!dataByDate[date]) dataByDate[date] = { total: 0 };
+                        entry.content.replace(/^[^:]+:\s*/, '').split(', ').forEach(item => { const cleanItem = item.trim(); if (cleanItem) { allKeys.add(cleanItem); dataByDate[date][cleanItem] = (dataByDate[date][cleanItem] || 0) + 1; } });
+                    });
+                    const chartData: any[] = [];
+                    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                        const dateStr = d.toISOString().split('T')[0];
+                        const dayData = dataByDate[dateStr] || { total: 0 };
+                        let total = 0;
+                        const entryForChart: Record<string, any> = { date: dateStr };
+                        allKeys.forEach(key => { const count = dayData[key] || 0; entryForChart[key] = count; total += count; });
+                        entryForChart.total = total;
+                        chartData.push(entryForChart);
+                    }
+                    renderStackedBarChart(chartContainer, chartData, Array.from(allKeys).sort(), currentCategory);
                 }
-                renderStackedBarChart(chartContainer, chartData, selectedCategories, selectedCategories[0]);
             } else {
                 const currentCategory = selectedCategories[0];
-                const filteredEntries = state.entries.filter(entry => {
-                    const entryDate = new Date(entry.timestamp);
-                    return entry.category === currentCategory && entryDate >= startDate && entryDate <= endDate;
-                });
-                const dataByDate: Record<string, any> = {};
-                const allKeys = new Set<string>();
-                filteredEntries.forEach(entry => {
-                    const date = new Date(entry.timestamp).toISOString().split('T')[0];
-                    if (!dataByDate[date]) dataByDate[date] = { total: 0 };
-                    const items = entry.content.replace(/^[^:]+:\s*/, '').split(', ');
-                    items.forEach(item => {
-                        const cleanItem = item.trim();
-                        if (!cleanItem) return;
-                        allKeys.add(cleanItem);
-                        dataByDate[date][cleanItem] = (dataByDate[date][cleanItem] || 0) + 1;
+                const filteredEntries = state.entries.filter(entry => new Date(entry.timestamp) >= startDate && new Date(entry.timestamp) <= endDate && entry.category === currentCategory);
+                if (currentChartType === 'combo') {
+                    const dataByDate: Record<string, any> = {};
+                    filteredEntries.forEach(entry => {
+                        const date = new Date(entry.timestamp).toISOString().split('T')[0];
+                        if (!dataByDate[date]) dataByDate[date] = { count: 0 };
+                        dataByDate[date].count += entry.content.replace(/^[^:]+:\s*/, '').split(', ').filter(item => item.trim()).length;
                     });
-                });
-                const chartData: any[] = [];
-                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    const dayData = dataByDate[dateStr] || { total: 0 };
-                    let total = 0;
-                    const entryForChart: Record<string, any> = { date: dateStr };
-                    allKeys.forEach(key => {
-                        const count = dayData[key] || 0;
-                        entryForChart[key] = count;
-                        total += count;
+                    const chartData: any[] = [];
+                    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                        const dateStr = d.toISOString().split('T')[0];
+                        const dailyInfo = state.dailyInfo[dateStr];
+                        chartData.push({ date: dateStr, count: (dataByDate[dateStr] || { count: 0 }).count, temp: dailyInfo ? dailyInfo.weather.temp : null });
+                    }
+                    renderComboChart(chartContainer, chartData, currentCategory);
+                } else if (currentChartType === 'pie') {
+                    const counts: Record<string, number> = {};
+                    filteredEntries.forEach(entry => entry.content.replace(/^[^:]+:\s*/, '').split(', ').forEach(item => { const cleanItem = item.trim(); if (cleanItem) counts[cleanItem] = (counts[cleanItem] || 0) + 1; }));
+                    renderPieChart(chartContainer, Object.entries(counts).map(([name, value]) => ({ name, value })), currentCategory);
+                } else {
+                    const dataByDate: Record<string, number> = {};
+                    filteredEntries.forEach(entry => {
+                        const date = new Date(entry.timestamp).toISOString().split('T')[0];
+                        dataByDate[date] = (dataByDate[date] || 0) + entry.content.replace(/^[^:]+:\s*/, '').split(', ').filter(item => item.trim()).length;
                     });
-                    entryForChart.total = total;
-                    chartData.push(entryForChart);
+                    const chartData: { date: string, value: number }[] = [];
+                    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                        const dateStr = d.toISOString().split('T')[0];
+                        chartData.push({ date: dateStr, value: dataByDate[dateStr] || 0 });
+                    }
+                    renderBarChart(chartContainer, chartData, currentCategory);
                 }
-                const sortedKeys = Array.from(allKeys).sort();
-                renderStackedBarChart(chartContainer, chartData, sortedKeys, currentCategory);
             }
-        } else {
-            const currentCategory = selectedCategories[0];
-            const filteredEntries = state.entries.filter(entry => {
-                const entryDate = new Date(entry.timestamp);
-                return entry.category === currentCategory && entryDate >= startDate && entryDate <= endDate;
-            });
+        };
 
-            if (currentChartType === 'combo') {
-                const dataByDate: Record<string, {count: number}> = {};
-                filteredEntries.forEach(entry => {
-                    const date = new Date(entry.timestamp).toISOString().split('T')[0];
-                    if (!dataByDate[date]) dataByDate[date] = { count: 0 };
-                    const items = entry.content.replace(/^[^:]+:\s*/, '').split(', ');
-                    const itemCount = items.filter(item => item.trim()).length;
-                    dataByDate[date].count += itemCount;
-                });
-                const chartData: {date: string; count: number; temp: number | null}[] = [];
-                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    const dayData = dataByDate[dateStr] || { count: 0 };
-                    const dailyInfo = state.dailyInfo[dateStr];
-                    chartData.push({ date: dateStr, count: dayData.count, temp: dailyInfo ? dailyInfo.weather.temp : null });
-                }
-                renderComboChart(chartContainer, chartData, currentCategory);
-            } else if (currentChartType === 'pie') {
-                const counts: Record<string, number> = {};
-                filteredEntries.forEach(entry => {
-                    const items = entry.content.replace(/^[^:]+:\s*/, '').split(', ');
-                    items.forEach(item => {
-                        const cleanItem = item.trim();
-                        if (!cleanItem) return;
-                        counts[cleanItem] = (counts[cleanItem] || 0) + 1;
-                    });
-                });
-                const chartData = Object.entries(counts).map(([name, value]) => ({ name, value }));
-                renderPieChart(chartContainer, chartData, currentCategory);
-            } else { // 'bar' chart for total frequency
-                const dataByDate: Record<string, number> = {};
-                filteredEntries.forEach(entry => {
-                    const date = new Date(entry.timestamp).toISOString().split('T')[0];
-                    const items = entry.content.replace(/^[^:]+:\s*/, '').split(', ');
-                    const itemCount = items.filter(item => item.trim()).length;
-                    dataByDate[date] = (dataByDate[date] || 0) + itemCount;
-                });
-                const chartData = [];
-                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                    const dateStr = d.toISOString().split('T')[0];
-                    chartData.push({ date: dateStr, value: dataByDate[dateStr] || 0 });
-                }
-                renderBarChart(chartContainer, chartData, currentCategory);
-            }
-        }
+        setTimeout(() => { updateControlsUI(); updateCharts(); }, 50);
     }
-
-    // Initial render
-    setTimeout(() => {
-        updateControlsUI();
-        updateCharts();
-    }, 50);
-
+    
+    render();
     return container;
 }

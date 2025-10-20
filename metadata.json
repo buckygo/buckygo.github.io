@@ -1,5 +1,7 @@
 {
-  "name": "抽動日誌",
+  "name": "Copy of Copy of 抽動日誌1018",
   "description": "一款記錄抽動症兒童每日飲食、行為、事件、情緒與徵狀的應用程式，並提供統計功能。",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }

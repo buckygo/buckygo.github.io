@@ -493,3 +493,181 @@ export function renderComboChart(container: HTMLElement, data: { date: string; c
         .on("mousemove", (event: any) => tooltip.style("top", (event.pageY - 10) + "px").style("left", (event.pageX + 10) + "px"))
         .on("mouseout", () => tooltip.style("visibility", "hidden"));
 }
+
+export function renderGrowthChart(container: HTMLElement, data: { timestamp: number; height?: number; weight?: number }[]) {
+    const chartData = data.filter(d => (d.height !== undefined && d.height > 0) || (d.weight !== undefined && d.weight > 0));
+
+    if (!container.clientWidth || chartData.length < 2) {
+        container.innerHTML = `<p class="text-center text-gray-500 text-sm py-8">沒有足夠的歷史資料可繪製趨勢圖 (至少需要 2 筆記錄)。</p>`;
+        return;
+    }
+    container.innerHTML = '';
+    const heightColor = '#3b82f6'; // blue-500
+    const weightColor = '#ef4444'; // red-500
+
+    const tooltip = d3.select("body").append("div")
+        .attr("class", "d3-tooltip")
+        .style("position", "absolute")
+        .style("z-index", "10")
+        .style("visibility", "hidden")
+        .style("padding", "8px")
+        .style("background", "rgba(0,0,0,0.8)")
+        .style("color", "#fff")
+        .style("border-radius", "4px")
+        .style("font-size", "12px")
+        .style("line-height", "1.4");
+    
+    const margin = { top: 30, right: 50, bottom: 80, left: 50 };
+    const width = container.clientWidth - margin.left - margin.right;
+    const height = 300 - margin.top - margin.bottom;
+
+    const svg = d3.select(container).append("svg")
+        .attr("width", "100%")
+        .attr("height", height + margin.top + margin.bottom)
+        .attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`)
+      .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+    
+    const x = d3.scaleTime()
+        .domain(d3.extent(chartData, (d: any) => new Date(d.timestamp)))
+        .range([0, width]);
+
+    svg.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(5).tickFormat(d3.timeFormat("%y/%m/%d")))
+        .selectAll("text")
+        .attr("transform", "translate(-10,5)rotate(-45)")
+        .style("text-anchor", "end");
+
+    // Y axis 1 (left) for height
+    const y1 = d3.scaleLinear()
+        .domain([0, d3.max(chartData, (d: any) => d.height) * 1.1])
+        .range([height, 0]);
+        
+    svg.append("g")
+        .call(d3.axisLeft(y1).ticks(5))
+        .append("text")
+        .attr("fill", heightColor)
+        .attr("transform", "rotate(-90)")
+        .attr("y", 6)
+        .attr("dy", "-3em")
+        .attr("text-anchor", "end")
+        .text("身高 (cm)");
+
+    // Y axis 2 (right) for weight
+    const y2 = d3.scaleLinear()
+        .domain([0, d3.max(chartData, (d: any) => d.weight) * 1.1])
+        .range([height, 0]);
+
+    svg.append("g")
+        .attr("transform", `translate(${width},0)`)
+        .call(d3.axisRight(y2).ticks(5))
+        .append("text")
+        .attr("fill", weightColor)
+        .attr("transform", "rotate(-90)")
+        .attr("y", -12)
+        .attr("dy", "3em")
+        .attr("text-anchor", "end")
+        .text("體重 (kg)");
+    
+    // Height line
+    const heightLine = d3.line()
+        .defined((d: any) => d.height !== undefined && d.height > 0)
+        .x((d: any) => x(new Date(d.timestamp)))
+        .y((d: any) => y1(d.height))
+        .curve(d3.curveMonotoneX);
+
+
+    svg.append("path")
+      .datum(chartData)
+      .attr("fill", "none")
+      .attr("stroke", heightColor)
+      .attr("stroke-width", 2.5)
+      .attr("d", heightLine as any);
+
+    // Weight line
+    const weightLine = d3.line()
+        .defined((d: any) => d.weight !== undefined && d.weight > 0)
+        .x((d: any) => x(new Date(d.timestamp)))
+        .y((d: any) => y2(d.weight))
+        .curve(d3.curveMonotoneX);
+        
+    svg.append("path")
+      .datum(chartData)
+      .attr("fill", "none")
+      .attr("stroke", weightColor)
+      .attr("stroke-width", 2.5)
+      .attr("d", weightLine as any);
+
+    // Circles for data points
+    const showTooltip = (event: any, d: any) => {
+        tooltip.style("visibility", "visible");
+        const date = new Date(d.timestamp);
+        const dateString = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+        let content = `<b>${dateString}</b>`;
+        if (d.height) content += `<br><span style="color:${heightColor}">●</span> 身高: ${d.height} cm`;
+        if (d.weight) content += `<br><span style="color:${weightColor}">●</span> 體重: ${d.weight} kg`;
+        tooltip.html(content);
+    };
+
+    const moveTooltip = (event: any) => {
+        return tooltip.style("top", (event.pageY - 10) + "px").style("left", (event.pageX + 10) + "px");
+    };
+    
+    const hideTooltip = () => {
+        return tooltip.style("visibility", "hidden");
+    };
+
+    svg.selectAll(".dot-height")
+       .data(chartData.filter((d: any) => d.height !== undefined && d.height > 0))
+       .enter().append("circle")
+       .attr("class", "dot-height")
+       .attr("cx", (d: any) => x(new Date(d.timestamp)))
+       .attr("cy", (d: any) => y1(d.height))
+       .attr("r", 5)
+       .attr("fill", heightColor)
+       .on("mouseover", showTooltip)
+       .on("mousemove", moveTooltip)
+       .on("mouseout", hideTooltip);
+
+    svg.selectAll(".dot-weight")
+       .data(chartData.filter((d: any) => d.weight !== undefined && d.weight > 0))
+       .enter().append("circle")
+       .attr("class", "dot-weight")
+       .attr("cx", (d: any) => x(new Date(d.timestamp)))
+       .attr("cy", (d: any) => y2(d.weight))
+       .attr("r", 5)
+       .attr("fill", weightColor)
+       .on("mouseover", showTooltip)
+       .on("mousemove", moveTooltip)
+       .on("mouseout", hideTooltip);
+
+    // Legend
+    const legend = svg.append("g")
+        .attr("transform", `translate(0, ${height + 50})`);
+    
+    const legendHeight = legend.append("g");
+    legendHeight.append("rect")
+        .attr("x", 0)
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("fill", heightColor);
+    legendHeight.append("text")
+        .attr("x", 16)
+        .attr("y", 10)
+        .text("身高 (cm)")
+        .style("font-size", "12px");
+        
+    const legendWeight = legend.append("g")
+        .attr("transform", "translate(100, 0)");
+    legendWeight.append("rect")
+        .attr("x", 0)
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("fill", weightColor);
+    legendWeight.append("text")
+        .attr("x", 16)
+        .attr("y", 10)
+        .text("體重 (kg)")
+        .style("font-size", "12px");
+}

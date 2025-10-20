@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { state, initState, registerRenderCallback } from './state.js';
-import { DailyLogView, AddEntryView, StatisticsView } from './views.js';
+import { DailyLogView, AddEntryView, StatisticsView, showBasicInfoModal } from './views.js';
 import { Header, Navigation } from './components.js';
 
 let deferredInstallPrompt: any = null;
@@ -19,7 +19,8 @@ function render() {
 
   mainContainer.appendChild(Header({
       isInstallable: !!deferredInstallPrompt,
-      onInstallClick: handleInstallClick
+      onInstallClick: handleInstallClick,
+      onSettingsClick: showBasicInfoModal
   }));
 
   const content = document.createElement('main');
