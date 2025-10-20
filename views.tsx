@@ -1,5 +1,3 @@
-
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -115,7 +113,7 @@ export function showBasicInfoModal({ isAdding = false }: { isAdding?: boolean } 
 
     const header = document.createElement('div');
     header.className = 'p-4 border-b flex items-center justify-between';
-    header.innerHTML = `<h3 class="font-semibold text-center text-lg text-gray-800">${isAdding ? '新增基本資料' : '編輯基本資料'}</h3>`;
+    header.innerHTML = `<h3 class="font-semibold text-center text-lg text-gray-800">新增基本資料</h3>`;
     const closeButton = document.createElement('button');
     closeButton.className = 'p-1 text-gray-500 hover:text-gray-800 rounded-full';
     closeButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
@@ -124,6 +122,7 @@ export function showBasicInfoModal({ isAdding = false }: { isAdding?: boolean } 
 
     const body = document.createElement('div');
     body.className = 'p-4 space-y-4';
+    // When adding new info, start with a blank form. Otherwise, pre-fill for editing.
     const info = isAdding ? {} : state.basicInfo;
     
     body.innerHTML = `
@@ -162,7 +161,9 @@ export function showBasicInfoModal({ isAdding = false }: { isAdding?: boolean } 
         const weightInput = panel.querySelector<HTMLInputElement>('#basic-weight');
         
         const getVal = (input: HTMLInputElement | null): number | undefined => {
-            if (!input || input.value.trim() === '') return undefined;
+            if (!input || !input.value || input.value.trim() === '') {
+                return undefined;
+            }
             const num = parseFloat(input.value);
             return isNaN(num) ? undefined : num;
         };
@@ -2256,7 +2257,9 @@ export function StatisticsView() {
             const weightInput = panel.querySelector<HTMLInputElement>('#edit-weight');
             
             const getVal = (input: HTMLInputElement | null): number | undefined => {
-                if (!input || input.value.trim() === '') return undefined;
+                if (!input || !input.value || input.value.trim() === '') {
+                    return undefined;
+                }
                 const num = parseFloat(input.value);
                 return isNaN(num) ? undefined : num;
             };

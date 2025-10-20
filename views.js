@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -109,7 +108,7 @@ export function showBasicInfoModal({ isAdding = false } = {}) {
 
     const header = document.createElement('div');
     header.className = 'p-4 border-b flex items-center justify-between';
-    header.innerHTML = `<h3 class="font-semibold text-center text-lg text-gray-800">${isAdding ? '新增基本資料' : '編輯基本資料'}</h3>`;
+    header.innerHTML = `<h3 class="font-semibold text-center text-lg text-gray-800">新增基本資料</h3>`;
     const closeButton = document.createElement('button');
     closeButton.className = 'p-1 text-gray-500 hover:text-gray-800 rounded-full';
     closeButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
@@ -118,6 +117,7 @@ export function showBasicInfoModal({ isAdding = false } = {}) {
 
     const body = document.createElement('div');
     body.className = 'p-4 space-y-4';
+    // When adding new info, start with a blank form. Otherwise, pre-fill for editing.
     const info = isAdding ? {} : state.basicInfo;
     
     body.innerHTML = `
@@ -156,7 +156,9 @@ export function showBasicInfoModal({ isAdding = false } = {}) {
         const weightInput = panel.querySelector('#basic-weight');
         
         const getVal = (input) => {
-            if (!input || input.value.trim() === '') return undefined;
+            if (!input || !input.value || input.value.trim() === '') {
+                return undefined;
+            }
             const num = parseFloat(input.value);
             return isNaN(num) ? undefined : num;
         };
@@ -737,6 +739,7 @@ export function DailyLogView() {
             const modalBody = document.createElement('div');
             modalBody.className = 'p-4 overflow-y-auto custom-scrollbar flex-grow';
 
+            // FIX: Add date/time inputs for editing.
             const dateTimeContainer = document.createElement('div');
             dateTimeContainer.className = 'grid grid-cols-2 gap-3 mb-4';
             const entryDate = new Date(timestamp);
@@ -789,6 +792,7 @@ export function DailyLogView() {
 
                 if (subCat) {
                      if (category === '健康' && subCat.name === '睡眠') {
+                        // FIX: Initialize sleep UI with existing entry data if available
                         const match = entry.content.match(/\((\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})\)/);
                         let bedtimeValue = '22:00';
                         let waketimeValue = '07:00';
@@ -1010,9 +1014,11 @@ export function DailyLogView() {
 
         footer.className = 'p-4 border-t border-gray-200 bg-white flex-shrink-0';
         confirmButton.className = 'w-full py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition disabled:bg-gray-300';
+        // FIX: Correct button text for editing.
         confirmButton.textContent = '儲存變更';
         confirmButton.disabled = selectedItems.size === 0 && !(category === '健康' && viewingSubCategoryItems === '睡眠');
 
+        // FIX: Overhaul of confirm button logic for editing.
         confirmButton.onclick = () => {
             let newContent = '';
             let newTimestamp;
@@ -2245,7 +2251,9 @@ export function StatisticsView() {
             const weightInput = panel.querySelector('#edit-weight');
             
             const getVal = (input) => {
-                if (!input || input.value.trim() === '') return undefined;
+                if (!input || !input.value || input.value.trim() === '') {
+                    return undefined;
+                }
                 const num = parseFloat(input.value);
                 return isNaN(num) ? undefined : num;
             };

@@ -20,7 +20,7 @@ function render() {
   mainContainer.appendChild(Header({
       isInstallable: !!deferredInstallPrompt,
       onInstallClick: handleInstallClick,
-      onSettingsClick: showBasicInfoModal
+      onSettingsClick: () => showBasicInfoModal({ isAdding: true })
   }));
 
   const content = document.createElement('main');
